@@ -975,6 +975,7 @@ select.input { cursor: pointer; }
 .roster-email { font-size: 0.92rem; color: var(--text); font-weight: 600; }
 .roster-status { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.1rem; }
 .roster-status.working { color: var(--green); }
+.roster-email-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.05rem; }
 .roster-today { font-size: 0.82rem; color: var(--text-muted); flex-shrink: 0; text-align: right; }
 .team-empty { font-size: 0.9rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
 
@@ -3422,23 +3423,25 @@ body.settings-open #settings-page { display: flex; }
     }
   }
 
-  function displayNameFor(p, fallbackId) {
-    return (p && (p.first_name || p.last_name)) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p && p.email) || fallbackId;
+  function fullNameFor(p) {
+    const name = p && `${p.first_name || ''} ${p.last_name || ''}`.trim();
+    return name || 'Unnamed user';
   }
 
   // Simple name + email roster, shared by both the owner and member org-settings views.
   function renderSimpleMemberList(memberIds, profileById) {
     if (!memberIds.length) return '<div class="team-empty">No members yet.</div>';
     return `<ul class="roster-list">${memberIds.map(id => {
-      const p = profileById[id] || {};
-      const name = displayNameFor(p, id);
-      const initial = (name[0] || '?').toUpperCase();
+      const p = profileById[id];
+      const name = fullNameFor(p);
+      const email = (p && p.email) || 'No email on file';
+      const initial = (p && p.email ? p.email[0] : name[0] || '?').toUpperCase();
       return `
         <li class="roster-row">
           <div class="roster-avatar">${esc(initial)}</div>
           <div class="roster-body">
             <div class="roster-email">${esc(name)}${id === currentUser.id ? ' (you)' : ''}</div>
-            <div class="roster-status">${esc(p.email || '')}</div>
+            <div class="roster-status">${esc(email)}</div>
           </div>
         </li>
       `;
@@ -3451,9 +3454,10 @@ body.settings-open #settings-page { display: flex; }
       sb.from('org_members').select('user_id').eq('org_id', org.id),
     ]);
     const memberIds = (members || []).map(m => m.user_id);
-    const { data: profiles } = memberIds.length
+    const { data: profiles, error: profilesErr } = memberIds.length
       ? await sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds)
       : { data: [] };
+    if (profilesErr) notifySyncError('load member profiles failed', profilesErr);
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
 
@@ -3545,9 +3549,10 @@ body.settings-open #settings-page { display: flex; }
       sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
     ]);
     const memberIds = (members || []).map(m => m.user_id);
-    const { data: profiles } = memberIds.length
+    const { data: profiles, error: profilesErr2 } = memberIds.length
       ? await sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds)
       : { data: [] };
+    if (profilesErr2) notifySyncError('load member profiles failed', profilesErr2);
 
     const teamNameById = {};
     (teams || []).forEach(t => { teamNameById[t.id] = t.name; });
@@ -3619,7 +3624,7 @@ body.settings-open #settings-page { display: flex; }
     ]);
     const memberIds = (members || []).map(m => m.user_id);
 
-    const [{ data: profiles }, { data: assignments }, { data: activeRows }, { data: todayRows }] = memberIds.length
+    const [profilesRes, assignRes, activeRes, todayRes] = memberIds.length
       ? await Promise.all([
           sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
           sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
@@ -3627,6 +3632,8 @@ body.settings-open #settings-page { display: flex; }
           sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
         ])
       : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+    if (profilesRes.error) notifySyncError('load member profiles failed', profilesRes.error);
+    const profiles = profilesRes.data, assignments = assignRes.data, activeRows = activeRes.data, todayRows = todayRes.data;
 
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
@@ -3674,9 +3681,10 @@ body.settings-open #settings-page { display: flex; }
       return;
     }
     rosterEl.innerHTML = memberIds.map(id => {
-      const p = profileById[id] || {};
-      const name = displayNameFor(p, id);
-      const initial = (name[0] || '?').toUpperCase();
+      const p = profileById[id];
+      const name = fullNameFor(p);
+      const email = (p && p.email) || 'No email on file';
+      const initial = (p && p.email ? p.email[0] : name[0] || '?').toUpperCase();
       const active = activeById[id];
       const todayStr = fmtHM(totalById[id] || 0);
       const statusHtml = active
@@ -3687,6 +3695,7 @@ body.settings-open #settings-page { display: flex; }
           <div class="roster-avatar">${esc(initial)}</div>
           <div class="roster-body">
             <div class="roster-email">${esc(name)}</div>
+            <div class="roster-email-sub">${esc(email)}</div>
             ${statusHtml}
           </div>
           <select class="input teams-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
