@@ -925,6 +925,12 @@ select.input { cursor: pointer; }
 .todo-footer { display: flex; justify-content: flex-end; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .todo-empty { font-size: 0.95rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
 
+/* ── Org switcher ── */
+.org-switcher-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
 /* ── Team ── */
 .team-live-dot {
   display: inline-block; width: 7px; height: 7px; border-radius: 50%;
@@ -1272,10 +1278,16 @@ body.settings-open #settings-page { display: flex; }
   <button class="tab-btn active" data-tab="timer">Timer</button>
   <button class="tab-btn" data-tab="retro">Retro</button>
   <button class="tab-btn" data-tab="todo">TODO</button>
+  <button class="tab-btn hidden" data-tab="teams" id="teams-tab-btn">Teams</button>
 </div>
 
 <main class="app-shell">
 <div id="tab-timer" class="tab-panel active">
+
+  <div id="org-switcher-row" class="org-switcher-row hidden">
+    <label class="form-label" for="org-switcher" style="margin:0;">Organization</label>
+    <select id="org-switcher" class="input" style="max-width:280px;"></select>
+  </div>
 
   <!-- Active timer card -->
   <div id="active-card" class="active-card hidden" role="region" aria-live="polite" aria-label="Active timer">
@@ -1451,6 +1463,10 @@ body.settings-open #settings-page { display: flex; }
   </div>
 </div><!-- /tab-todo -->
 
+<div id="tab-teams" class="tab-panel">
+  <div id="teams-content"></div>
+</div><!-- /tab-teams -->
+
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1486,6 +1502,7 @@ body.settings-open #settings-page { display: flex; }
     GAP_THRESHOLD:   'punch_gap_threshold',
     THEME:           'punch_theme',
     IS_MANAGER:      'punch_is_manager',
+    CURRENT_ORG:     'punch_current_org',
   };
 
   const ORG     = 'storee';
@@ -1586,6 +1603,10 @@ body.settings-open #settings-page { display: flex; }
   const newOrgNameInput    = $('new-org-name-input');
   const createOrgBtn       = $('create-org-btn');
   const orgList            = $('org-list');
+  const orgSwitcherRow     = $('org-switcher-row');
+  const orgSwitcher        = $('org-switcher');
+  const teamsTabBtn        = $('teams-tab-btn');
+  const teamsContent       = $('teams-content');
   const roundSelect          = $('round-select');
   const gapThresholdSelect   = $('gap-threshold-select');
   const workStartInput  = $('work-start-input');
@@ -3039,13 +3060,11 @@ body.settings-open #settings-page { display: flex; }
   }
   function hideSettingsPage() {
     document.body.classList.remove('settings-open');
-    stopOrgLiveUpdates();
   }
   function switchSettingsSection(name) {
     document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.toggle('active', b.dataset.settingsSection === name));
     document.querySelectorAll('.settings-section').forEach(s => s.classList.toggle('active', s.id === 'settings-section-' + name));
-    if (name === 'organizations') { renderOrgList(); startOrgLiveUpdates(); }
-    else stopOrgLiveUpdates();
+    if (name === 'organizations') renderOrgList();
   }
   document.querySelectorAll('.settings-nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchSettingsSection(btn.dataset.settingsSection));
@@ -3234,6 +3253,12 @@ body.settings-open #settings-page { display: flex; }
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       $('tab-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'teams') {
+        renderTeamsTab();
+        startOrgLiveUpdates();
+      } else {
+        stopOrgLiveUpdates();
+      }
     });
   });
 
@@ -3255,6 +3280,7 @@ body.settings-open #settings-page { display: flex; }
     if (!currentUser) return;
     accountSaveBtn.disabled = true;
     save(K.IS_MANAGER, isManagerCheckbox.checked);
+    updateTeamsTabVisibility();
     try {
       unwrap(await sb.from('profiles').upsert({
         id: currentUser.id,
@@ -3332,6 +3358,7 @@ body.settings-open #settings-page { display: flex; }
       joinOrgCodeInput.value = '';
       toast('Joined organization.', 'success');
       renderOrgList();
+      renderOrgSwitcher();
     } catch (err) {
       joinOrgStatus.style.color = 'var(--red)';
       joinOrgStatus.textContent = err.message || 'Could not redeem that code.';
@@ -3350,6 +3377,7 @@ body.settings-open #settings-page { display: flex; }
       newOrgNameInput.value = '';
       toast('Organization created.', 'success');
       renderOrgList();
+      renderOrgSwitcher();
     } catch (err) {
       toast(err.message || 'Could not create organization.', 'error');
     } finally {
@@ -3394,34 +3422,40 @@ body.settings-open #settings-page { display: flex; }
     }
   }
 
+  function displayNameFor(p, fallbackId) {
+    return (p && (p.first_name || p.last_name)) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p && p.email) || fallbackId;
+  }
+
+  // Simple name + email roster, shared by both the owner and member org-settings views.
+  function renderSimpleMemberList(memberIds, profileById) {
+    if (!memberIds.length) return '<div class="team-empty">No members yet.</div>';
+    return `<ul class="roster-list">${memberIds.map(id => {
+      const p = profileById[id] || {};
+      const name = displayNameFor(p, id);
+      const initial = (name[0] || '?').toUpperCase();
+      return `
+        <li class="roster-row">
+          <div class="roster-avatar">${esc(initial)}</div>
+          <div class="roster-body">
+            <div class="roster-email">${esc(name)}${id === currentUser.id ? ' (you)' : ''}</div>
+            <div class="roster-status">${esc(p.email || '')}</div>
+          </div>
+        </li>
+      `;
+    }).join('')}</ul>`;
+  }
+
   async function renderOrgManagePanel(org, container) {
-    const [{ data: invites }, { data: teams }, { data: members }] = await Promise.all([
+    const [{ data: invites }, { data: members }] = await Promise.all([
       sb.from('org_invites').select('*').eq('org_id', org.id).is('used_at', null).gte('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
-      sb.from('teams').select('*').eq('org_id', org.id).order('created_at', { ascending: true }),
       sb.from('org_members').select('user_id').eq('org_id', org.id),
     ]);
     const memberIds = (members || []).map(m => m.user_id);
-
-    const [{ data: profiles }, { data: assignments }, { data: activeRows }, { data: todayRows }] = memberIds.length
-      ? await Promise.all([
-          sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
-          sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
-          sb.from('active_timer').select('*').in('user_id', memberIds),
-          sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
-        ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
-
+    const { data: profiles } = memberIds.length
+      ? await sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds)
+      : { data: [] };
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
-    const teamIdByUser = {};
-    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
-    const activeById = {};
-    (activeRows || []).forEach(a => { activeById[a.user_id] = a; });
-    const totalById = {};
-    (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
-
-    const teamOptionsHtml = ['<option value="">Unassigned</option>']
-      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
 
     container.innerHTML = `
       <div>
@@ -3434,18 +3468,8 @@ body.settings-open #settings-page { display: flex; }
         <ul class="invite-list org-invites-list"></ul>
       </div>
       <div>
-        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Teams</div>
-        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
-        </div>
-        <div style="display:flex; gap:0.4rem;">
-          <input type="text" class="input org-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
-          <button class="btn btn-ghost btn-sm org-add-team-btn">Add team</button>
-        </div>
-      </div>
-      <div>
-        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Roster<span class="team-live-dot"></span></div>
-        <ul class="roster-list org-roster-list"></ul>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
+        <div class="org-members-list">${renderSimpleMemberList(memberIds, profileById)}</div>
       </div>
     `;
 
@@ -3512,54 +3536,6 @@ body.settings-open #settings-page { display: flex; }
         btn.disabled = false;
       }
     });
-
-    container.querySelector('.org-add-team-btn').addEventListener('click', async (e) => {
-      const input = container.querySelector('.org-new-team-input');
-      const name = input.value.trim();
-      if (!name) return;
-      e.currentTarget.disabled = true;
-      const { error } = await sb.from('teams').insert({ org_id: org.id, name });
-      if (error) toast('Could not add team.', 'error');
-      else { input.value = ''; renderOrgList(); }
-      e.currentTarget.disabled = false;
-    });
-
-    const rosterEl = container.querySelector('.org-roster-list');
-    if (!memberIds.length) {
-      rosterEl.innerHTML = '<li class="team-empty">No members yet — generate an invite code above.</li>';
-    } else {
-      rosterEl.innerHTML = memberIds.map(id => {
-        const p = profileById[id] || {};
-        const displayName = (p.first_name || p.last_name) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p.email || id);
-        const initial = (displayName[0] || '?').toUpperCase();
-        const active = activeById[id];
-        const todayStr = fmtHM(totalById[id] || 0);
-        const statusHtml = active
-          ? `<div class="roster-status working">Working on ${active.task_id ? '#' + esc(active.task_id) + ' — ' : ''}${esc(active.task_title || 'untitled')} (${fmtElapsed(active.start_time)})</div>`
-          : `<div class="roster-status">Idle</div>`;
-        return `
-          <li class="roster-row">
-            <div class="roster-avatar">${esc(initial)}</div>
-            <div class="roster-body">
-              <div class="roster-email">${esc(displayName)}</div>
-              ${statusHtml}
-            </div>
-            <select class="input org-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
-            <div class="roster-today">Today<br>${esc(todayStr)}</div>
-          </li>
-        `;
-      }).join('');
-      rosterEl.querySelectorAll('.org-team-assign').forEach(sel => {
-        sel.value = teamIdByUser[sel.dataset.userId] || '';
-        sel.addEventListener('change', async () => {
-          sel.disabled = true;
-          const teamId = sel.value || null;
-          const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
-          if (error) toast('Could not assign team.', 'error');
-          sel.disabled = false;
-        });
-      });
-    }
   }
 
   async function renderOrgMemberPanel(org, container, statusEl) {
@@ -3583,43 +3559,161 @@ body.settings-open #settings-page { display: flex; }
     const myTeamId = teamIdByUser[currentUser.id];
     statusEl.textContent = `Your team: ${myTeamId ? (teamNameById[myTeamId] || 'Unknown') : 'Unassigned'}`;
 
-    if (!memberIds.length) {
-      container.innerHTML = '<div class="team-empty">No members yet.</div>';
-      return;
-    }
     container.innerHTML = `
       <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
-        <ul class="roster-list">
-          ${memberIds.map(id => {
-            const p = profileById[id] || {};
-            const displayName = (p.first_name || p.last_name) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p.email || id);
-            const initial = (displayName[0] || '?').toUpperCase();
-            const teamId = teamIdByUser[id];
-            const teamLabel = teamId ? (teamNameById[teamId] || 'Unknown team') : 'Unassigned';
-            return `
-              <li class="roster-row">
-                <div class="roster-avatar">${esc(initial)}</div>
-                <div class="roster-body">
-                  <div class="roster-email">${esc(displayName)}${id === currentUser.id ? ' (you)' : ''}</div>
-                  <div class="roster-status">${esc(teamLabel)}</div>
-                </div>
-              </li>
-            `;
-          }).join('')}
-        </ul>
+        ${renderSimpleMemberList(memberIds, profileById)}
       </div>
     `;
+  }
+
+  // ── Teams tab (managers only; scoped to the org picked in the switcher) ──
+  async function renderOrgSwitcher() {
+    if (!currentUser) return;
+    const { data: orgs, error } = await sb.from('organizations').select('*').order('created_at', { ascending: true });
+    if (error) { console.warn('load orgs for switcher failed', error); return; }
+    orgSwitcherRow.classList.toggle('hidden', !orgs || !orgs.length);
+    if (!orgs || !orgs.length) return;
+
+    const saved = load(K.CURRENT_ORG, null);
+    const validIds = orgs.map(o => o.id);
+    const current = validIds.includes(saved) ? saved : orgs[0].id;
+    save(K.CURRENT_ORG, current);
+
+    orgSwitcher.innerHTML = orgs.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+    orgSwitcher.value = current;
+  }
+  orgSwitcher.addEventListener('change', () => {
+    save(K.CURRENT_ORG, orgSwitcher.value);
+    if (document.getElementById('tab-teams').classList.contains('active')) renderTeamsTab();
+  });
+
+  function updateTeamsTabVisibility() {
+    const isManager = load(K.IS_MANAGER, false);
+    teamsTabBtn.classList.toggle('hidden', !isManager);
+    if (!isManager && teamsTabBtn.classList.contains('active')) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('.tab-btn[data-tab="timer"]').classList.add('active');
+      $('tab-timer').classList.add('active');
+      stopOrgLiveUpdates();
+    }
+  }
+
+  async function renderTeamsTab() {
+    if (!currentUser) return;
+    const orgId = load(K.CURRENT_ORG, null);
+    if (!orgId) {
+      teamsContent.innerHTML = '<div class="team-empty">You\'re not part of an organization yet — set one up in Settings → Organizations.</div>';
+      return;
+    }
+    const { data: org } = await sb.from('organizations').select('*').eq('id', orgId).maybeSingle();
+    if (!org || org.owner_id !== currentUser.id) {
+      teamsContent.innerHTML = '<div class="team-empty">You only manage teams for organizations you own. Switch to one you manage using the dropdown above the timer.</div>';
+      return;
+    }
+
+    const [{ data: teams }, { data: members }] = await Promise.all([
+      sb.from('teams').select('*').eq('org_id', org.id).order('created_at', { ascending: true }),
+      sb.from('org_members').select('user_id').eq('org_id', org.id),
+    ]);
+    const memberIds = (members || []).map(m => m.user_id);
+
+    const [{ data: profiles }, { data: assignments }, { data: activeRows }, { data: todayRows }] = memberIds.length
+      ? await Promise.all([
+          sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
+          sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
+          sb.from('active_timer').select('*').in('user_id', memberIds),
+          sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+
+    const profileById = {};
+    (profiles || []).forEach(p => { profileById[p.id] = p; });
+    const teamIdByUser = {};
+    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
+    const activeById = {};
+    (activeRows || []).forEach(a => { activeById[a.user_id] = a; });
+    const totalById = {};
+    (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
+
+    const teamOptionsHtml = ['<option value="">Unassigned</option>']
+      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
+
+    teamsContent.innerHTML = `
+      <div class="section-card">
+        <div class="section-eyebrow">Teams in ${esc(org.name)}</div>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin:0.5rem 0;">
+          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
+        </div>
+        <div style="display:flex; gap:0.4rem;">
+          <input type="text" class="input teams-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
+          <button class="btn btn-ghost btn-sm teams-add-team-btn">Add team</button>
+        </div>
+      </div>
+      <div class="section-card" style="margin-top:1.25rem;">
+        <div class="section-eyebrow">Roster<span class="team-live-dot" title="Live updates on"></span></div>
+        <ul class="roster-list teams-roster-list" style="margin-top:0.75rem;"></ul>
+      </div>
+    `;
+
+    teamsContent.querySelector('.teams-add-team-btn').addEventListener('click', async (e) => {
+      const input = teamsContent.querySelector('.teams-new-team-input');
+      const name = input.value.trim();
+      if (!name) return;
+      e.currentTarget.disabled = true;
+      const { error } = await sb.from('teams').insert({ org_id: org.id, name });
+      if (error) toast('Could not add team.', 'error');
+      else { input.value = ''; renderTeamsTab(); }
+      e.currentTarget.disabled = false;
+    });
+
+    const rosterEl = teamsContent.querySelector('.teams-roster-list');
+    if (!memberIds.length) {
+      rosterEl.innerHTML = '<li class="team-empty">No members yet — invite people from Settings → Organizations.</li>';
+      return;
+    }
+    rosterEl.innerHTML = memberIds.map(id => {
+      const p = profileById[id] || {};
+      const name = displayNameFor(p, id);
+      const initial = (name[0] || '?').toUpperCase();
+      const active = activeById[id];
+      const todayStr = fmtHM(totalById[id] || 0);
+      const statusHtml = active
+        ? `<div class="roster-status working">Working on ${active.task_id ? '#' + esc(active.task_id) + ' — ' : ''}${esc(active.task_title || 'untitled')} (${fmtElapsed(active.start_time)})</div>`
+        : `<div class="roster-status">Idle</div>`;
+      return `
+        <li class="roster-row">
+          <div class="roster-avatar">${esc(initial)}</div>
+          <div class="roster-body">
+            <div class="roster-email">${esc(name)}</div>
+            ${statusHtml}
+          </div>
+          <select class="input teams-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
+          <div class="roster-today">Today<br>${esc(todayStr)}</div>
+        </li>
+      `;
+    }).join('');
+    rosterEl.querySelectorAll('.teams-team-assign').forEach(sel => {
+      sel.value = teamIdByUser[sel.dataset.userId] || '';
+      sel.addEventListener('change', async () => {
+        sel.disabled = true;
+        const teamId = sel.value || null;
+        const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
+        if (error) toast('Could not assign team.', 'error');
+        sel.disabled = false;
+      });
+    });
   }
 
   let orgChannel = null;
   let orgPollTimer = null;
   function startOrgLiveUpdates() {
     stopOrgLiveUpdates();
-    orgPollTimer = setInterval(renderOrgList, 15000);
+    orgPollTimer = setInterval(renderTeamsTab, 15000);
     try {
       orgChannel = sb.channel('org-active-timer')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, () => renderOrgList())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, () => renderTeamsTab())
         .subscribe();
     } catch (err) { console.warn('realtime subscribe failed', err); }
   }
@@ -3989,6 +4083,8 @@ body.settings-open #settings-page { display: flex; }
     document.body.classList.remove('pre-auth');
     userEmailLabel.textContent = currentUser.email || '';
     init();
+    updateTeamsTabVisibility();
+    renderOrgSwitcher();
     const urlInvite = new URLSearchParams(location.search).get('invite');
     if (urlInvite) {
       history.replaceState(null, '', location.pathname + location.hash);
