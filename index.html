@@ -1,0 +1,3287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Punch</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱</text></svg>">
+<style>
+:root {
+  --ground:      #15181C;
+  --surface:     #1E2228;
+  --surface-2:   #252B33;
+  --border:      #2C3340;
+  --text:        #E1E4DF;
+  --text-muted:  #6B7480;
+  --accent:      #F4670A;
+  --accent-dim:  rgba(244,103,10,0.11);
+  --blue:        #4A90B8;
+  --green:       #52A87A;
+  --red:         #D95050;
+  --mono:        ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+  --ui:          system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r:           4px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+
+body {
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--ui);
+  line-height: 1.5;
+  min-height: 100vh;
+  padding-bottom: 5rem;
+}
+
+.hidden { display: none !important; }
+body.pre-auth .app-shell { display: none !important; }
+#auth-screen { display: none; }
+body.pre-auth #auth-screen { display: flex; }
+
+/* ── Auth screen ── */
+#auth-screen {
+  position: fixed; inset: 0;
+  background: var(--ground);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  padding: 1.5rem;
+}
+.auth-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.75rem;
+  width: min(360px, 100%);
+  display: flex; flex-direction: column; gap: 1.1rem;
+}
+.auth-logo {
+  font-family: var(--mono);
+  font-size: 0.9rem; font-weight: 700;
+  letter-spacing: 0.3em; color: var(--accent);
+  text-align: center; margin-bottom: 0.25rem;
+}
+.auth-tabs {
+  display: flex; gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.auth-tab {
+  flex: 1; background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-family: var(--ui); font-size: 0.8rem; font-weight: 600;
+  padding: 0.55rem 0.3rem; border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.auth-error {
+  font-size: 0.75rem; color: var(--red);
+  background: rgba(217,80,80,0.1); border: 1px solid rgba(217,80,80,0.3);
+  border-radius: var(--r); padding: 0.55rem 0.7rem;
+}
+.auth-status {
+  font-size: 0.75rem; color: var(--green);
+  background: rgba(82,168,122,0.1); border: 1px solid rgba(82,168,122,0.3);
+  border-radius: var(--r); padding: 0.55rem 0.7rem;
+}
+.auth-links {
+  display: flex; justify-content: space-between;
+  font-size: 0.7rem;
+}
+.auth-links a, .auth-links button.link-btn {
+  color: var(--text-muted); text-decoration: none;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; padding: 0;
+}
+.auth-links a:hover, .auth-links button.link-btn:hover { color: var(--accent); }
+.user-email-label {
+  font-family: var(--mono); font-size: 0.6rem; color: var(--text-muted);
+  max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.5rem;
+  width: min(420px, 92vw);
+  display: flex; flex-direction: column; gap: 1.1rem;
+}
+.modal-title {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.form-row { display: flex; flex-direction: column; gap: 0.35rem; }
+.form-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.checkbox-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.8rem; color: var(--text-muted);
+  cursor: pointer;
+}
+.checkbox-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.modal-actions {
+  display: flex; gap: 0.5rem; justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Header ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0;
+  background: var(--ground);
+  z-index: 10;
+}
+.app-name {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+}
+.header-right { display: flex; align-items: center; gap: 0.75rem; }
+.sync-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+.icon-btn {
+  background: none; border: none;
+  cursor: pointer; color: var(--text-muted);
+  font-size: 1rem; padding: 0.2rem;
+  line-height: 1; transition: color 0.15s;
+}
+.icon-btn:hover { color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
+
+/* ── Main ── */
+main {
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem;
+  display: flex; flex-direction: column; gap: 1.25rem;
+}
+
+/* ── Active card ── */
+.active-card {
+  background: var(--surface);
+  border-radius: var(--r);
+  border-left: 3px solid var(--accent);
+  padding: 1.25rem 1.4rem;
+  display: flex; flex-direction: column; gap: 0.9rem;
+  animation: pulse-border 2.4s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%,100% { border-left-color: var(--accent); }
+  50%      { border-left-color: rgba(244,103,10,0.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .active-card { animation: none; }
+}
+.active-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--accent);
+}
+.active-id {
+  font-family: var(--mono);
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--accent); margin-bottom: 0.15rem;
+}
+.active-title {
+  font-size: 0.95rem; font-weight: 500;
+  color: var(--text); line-height: 1.35;
+}
+.active-type {
+  font-size: 0.72rem; color: var(--text-muted); margin-top: 0.1rem;
+}
+.active-parent {
+  font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;
+  font-style: italic;
+}
+.timer-display {
+  font-family: var(--mono);
+  font-size: 3rem; font-weight: 500;
+  letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text); line-height: 1;
+  padding: 0.25rem 0;
+}
+.active-footer {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.started-label {
+  font-family: var(--mono);
+  font-size: 0.67rem; color: var(--text-muted);
+}
+
+/* ── Confirm card ── */
+.confirm-card {
+  background: var(--surface);
+  border-radius: var(--r);
+  border-left: 3px solid var(--blue);
+  padding: 1.25rem 1.4rem;
+  display: flex; flex-direction: column; gap: 0.9rem;
+}
+.confirm-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--blue);
+}
+.confirm-id {
+  font-family: var(--mono);
+  font-size: 0.75rem; font-weight: 700;
+  color: var(--blue); margin-bottom: 0.15rem;
+}
+.confirm-title {
+  font-size: 0.95rem; font-weight: 500;
+  color: var(--text); line-height: 1.35;
+}
+.duration-stepper {
+  display: flex; align-items: center; gap: 0.75rem;
+}
+.stepper-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text-muted);
+  font-family: var(--mono); font-size: 1.1rem;
+  width: 2rem; height: 2rem;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  line-height: 1;
+}
+.stepper-btn:hover:not(:disabled) { background: var(--border); color: var(--text); border-color: #4a5060; }
+.stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.stepper-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stepper-input {
+  font-family: var(--mono);
+  font-size: 2rem; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text); line-height: 1;
+  width: 4rem; text-align: right;
+  background: transparent; border: none; border-bottom: 1px solid var(--border);
+  outline: none; padding: 0 0.1rem;
+  -moz-appearance: textfield;
+}
+.stepper-input::-webkit-outer-spin-button,
+.stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.stepper-input:focus { border-bottom-color: var(--accent); }
+.stepper-unit {
+  font-family: var(--mono); font-size: 1rem;
+  color: var(--text-muted); align-self: flex-end; padding-bottom: 0.2rem;
+}
+.actual-elapsed {
+  font-family: var(--mono); font-size: 0.67rem;
+  color: var(--text-muted); margin-top: 0.2rem;
+}
+.confirm-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem;
+}
+.ado-preview {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.75rem 0.9rem;
+  display: flex; flex-direction: column; gap: 0.45rem;
+}
+.ado-preview-label {
+  font-family: var(--mono); font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 0.2rem;
+}
+.ado-row {
+  display: flex; align-items: center; gap: 0.55rem;
+  font-family: var(--mono); font-size: 0.72rem;
+}
+.ado-field { color: var(--text-muted); min-width: 5.5rem; flex-shrink: 0; }
+.ado-old   { color: var(--text-muted); }
+.ado-arrow { color: var(--border); }
+.ado-new   { color: var(--text); font-weight: 600; }
+.ado-new.zero { color: var(--text-muted); }
+.ado-note  {
+  font-size: 0.67rem; color: var(--text-muted);
+  padding-top: 0.25rem; border-top: 1px solid var(--border);
+  margin-top: 0.1rem;
+}
+.ado-error { font-size: 0.75rem; color: var(--red); }
+
+/* ── Section card ── */
+.section-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.25rem 1.4rem;
+}
+.section-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.6rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 0.9rem;
+}
+
+/* ── Buttons ── */
+.btn {
+  font-family: var(--ui);
+  font-size: 0.78rem; font-weight: 600;
+  padding: 0.48rem 1.1rem;
+  border-radius: var(--r);
+  border: none; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #df5e08; }
+
+.btn-danger {
+  background: rgba(217,80,80,0.13);
+  color: var(--red);
+  border: 1px solid rgba(217,80,80,0.28);
+}
+.btn-danger:hover:not(:disabled) { background: rgba(217,80,80,0.22); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: #4a5060; }
+.btn-sm { font-size: 0.75rem; padding: 0.2rem 0.6rem; }
+
+/* ── Typeahead ── */
+.search-wrap { position: relative; }
+
+.task-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  padding: 0.58rem 0.85rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.task-input::placeholder { color: var(--text-muted); }
+.task-input:focus { border-color: var(--accent); }
+.task-input:disabled { opacity: 0.5; }
+
+.dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  z-index: 50; max-height: 260px; overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.dropdown-item {
+  display: flex; align-items: baseline; gap: 0.65rem;
+  padding: 0.58rem 0.85rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(44,51,64,0.7);
+  transition: background 0.1s;
+}
+.dropdown-item:last-child { border-bottom: none; }
+.dropdown-item:hover, .dropdown-item.focused { background: var(--accent-dim); }
+.di-id {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+  color: var(--accent); flex-shrink: 0; min-width: 3.2rem;
+}
+.di-title {
+  font-size: 0.8rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.di-type {
+  font-size: 0.68rem; color: var(--text-muted);
+  flex-shrink: 0; margin-left: auto;
+}
+.dropdown-msg {
+  padding: 0.75rem 0.85rem;
+  font-size: 0.78rem; color: var(--text-muted); font-style: italic;
+}
+.dropdown-item.create-item {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+.di-create { font-size: 0.8rem; color: var(--blue); }
+.di-parent {
+  width: 100%; padding-left: calc(3.2rem + 0.65rem);
+  font-size: 0.65rem; color: var(--text-muted);
+  margin-top: -0.15rem; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.di-drill { font-size: 0.68rem; color: var(--blue); flex-shrink: 0; margin-left: auto; }
+.di-back  { font-size: 0.8rem; color: var(--blue); }
+.dropdown-item { flex-wrap: wrap; }
+
+/* ── Selected chip ── */
+.chip {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--accent-dim);
+  border: 1px solid rgba(244,103,10,0.28);
+  border-radius: var(--r);
+  padding: 0.48rem 0.85rem;
+  margin-top: 0.6rem;
+}
+.chip-id {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+  color: var(--accent); flex-shrink: 0;
+}
+.chip-title {
+  font-size: 0.8rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+}
+.chip-x {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 1rem; line-height: 1;
+  padding: 0; flex-shrink: 0; transition: color 0.15s;
+}
+.chip-x:hover { color: var(--red); }
+
+.entry-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 0.65rem; margin-top: 0.85rem;
+}
+
+/* ── Loading ── */
+.loading-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.78rem; color: var(--text-muted); padding: 0.35rem 0;
+}
+.spinner {
+  width: 13px; height: 13px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Log ── */
+.log-header {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.log-date {
+  font-family: var(--mono); font-size: 0.62rem;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-muted);
+}
+.log-total {
+  font-family: var(--mono); font-size: 0.8rem; font-weight: 700; color: var(--text);
+}
+
+.log-table { width: 100%; border-collapse: collapse; }
+.log-table thead th {
+  font-family: var(--mono); font-size: 0.58rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
+  text-align: left; padding: 0 0.5rem 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.log-table thead th:last-child { text-align: right; padding-right: 0; }
+.log-table tbody tr { border-bottom: 1px solid rgba(44,51,64,0.55); }
+.log-table tbody tr:last-child { border-bottom: none; }
+.log-table tbody td { padding: 0.55rem 0.5rem 0.55rem 0; vertical-align: middle; }
+.td-id {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 700;
+  color: var(--accent); white-space: nowrap;
+}
+.ado-link { color: var(--accent); text-decoration: none; }
+.ado-link:hover { text-decoration: underline; }
+.parent-link { color: var(--blue); font-weight: 400; }
+.td-title {
+  font-size: 0.8rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;
+}
+.td-comment {
+  font-size: 0.72rem; color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin-top: 0.1rem;
+}
+.comment-input-wrap { margin-top: 0.75rem; }
+.comment-input-wrap textarea {
+  width: 100%; font-family: var(--ui); font-size: 0.8rem;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--r);
+  padding: 0.35rem 0.5rem; resize: vertical; min-height: 3rem;
+}
+.comment-input-wrap textarea:focus { outline: none; border-color: var(--accent); }
+.td-range {
+  font-family: var(--mono); font-size: 0.68rem;
+  color: var(--text-muted); white-space: nowrap;
+}
+.td-dur {
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 700;
+  color: var(--text); text-align: right; white-space: nowrap;
+}
+/* ── Week view ── */
+.week-nav {
+  display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem;
+}
+.week-label {
+  font-family: var(--mono); font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted); flex: 1; text-align: center;
+}
+.week-summary {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding-bottom: 0.65rem; margin-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+.week-summary-label { font-size: 0.75rem; color: var(--text-muted); }
+.week-summary-total { font-family: var(--mono); font-size: 0.88rem; font-weight: 700; color: var(--text); }
+.day-section { }
+.day-header {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.48rem 0; cursor: pointer;
+  border-top: 1px solid rgba(44,51,64,0.55);
+  user-select: none;
+}
+.day-header.no-entries { cursor: default; opacity: 0.5; }
+.day-section:first-child .day-header { border-top: none; }
+.day-toggle {
+  font-size: 0.55rem; color: var(--text-muted); width: 0.7rem;
+  flex-shrink: 0; transition: transform 0.15s; display: inline-block;
+}
+.day-toggle.expanded { transform: rotate(90deg); }
+.day-toggle.invisible { visibility: hidden; }
+.day-name {
+  font-family: var(--mono); font-size: 0.67rem; font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--text);
+}
+.day-name.today { color: var(--accent); }
+.today-badge {
+  font-family: var(--mono); font-size: 0.55rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-dim);
+  border: 1px solid rgba(244,103,10,0.22);
+  border-radius: 2px; padding: 0.1rem 0.3rem;
+}
+.day-total {
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--text-muted); margin-left: auto;
+}
+.day-total.has-entries { color: var(--text); font-weight: 600; }
+.day-entries { padding-bottom: 0.35rem; }
+.day-entries.collapsed { display: none; }
+
+select.input { cursor: pointer; }
+
+.log-empty {
+  font-size: 0.8rem; color: var(--text-muted);
+  padding: 1.25rem 0; text-align: center;
+}
+.td-del {
+  width: 3rem; text-align: right; padding-right: 0; white-space: nowrap;
+}
+.delete-btn, .edit-entry-btn, .continue-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.9rem; line-height: 1;
+  padding: 0.1rem 0.2rem;
+  transition: color 0.15s;
+  opacity: 0;
+}
+.delete-btn { color: var(--border); }
+.edit-entry-btn { color: var(--border); }
+.log-table tbody tr:hover .delete-btn,
+.log-table tbody tr:hover .edit-entry-btn,
+.log-table tbody tr:hover .continue-btn { opacity: 1; }
+.delete-btn:hover { color: var(--red); }
+.edit-entry-btn:hover { color: var(--accent); }
+.continue-btn { color: var(--border); }
+.continue-btn:hover { color: #4caf87; }
+.entry-edit-row td {
+  padding: 0.4rem 0.5rem 0.6rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.entry-edit-fields {
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+}
+.entry-edit-fields label { font-size: 0.75rem; color: var(--text-muted); }
+.entry-edit-fields input[type=time] {
+  font-family: var(--mono); font-size: 0.8rem;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--r); padding: 0.2rem 0.4rem;
+}
+.entry-edit-err { font-size: 0.75rem; color: var(--red); }
+.edit-synced-label { font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+.entry-edit-actions { display: flex; gap: 0.4rem; margin-left: auto; }
+.entry-edit-actions button { font-size: 0.75rem; padding: 0.25rem 0.65rem; }
+.gap-row td { padding: 0.2rem 0; border-bottom: none !important; }
+.gap-row-inner { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.35rem 0.5rem; border-left: 2px solid #b8860b; margin-bottom: 0.15rem; }
+.gap-row-controls { display: flex; align-items: center; gap: 0.55rem; }
+.gap-label { font-size: 0.68rem; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+.gap-form { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; }
+.gap-search-wrap { position: relative; flex: 1; min-width: 0; }
+.gap-input { width: 100%; font-size: 0.78rem; padding: 0.2rem 0.45rem; }
+.gap-chip { font-size: 0.72rem; background: var(--surface-2); border-radius: var(--r); padding: 0.15rem 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.gap-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); z-index: 300; max-height: 180px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+.gap-dropdown.hidden { display: none; }
+.gap-note { width: 100%; resize: vertical; min-height: 2.5rem; font-size: 0.78rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--r); padding: 0.3rem 0.5rem; box-sizing: border-box; font-family: var(--ui); }
+.gap-find-btn { margin-left: 0; font-size: 0.68rem; padding: 0.15rem 0.5rem; opacity: 0; transition: opacity 0.15s; }
+.day-summary-btn {
+  margin-left: auto; font-size: 0.68rem; padding: 0.15rem 0.5rem;
+  opacity: 0; transition: opacity 0.15s;
+}
+.day-header:hover .day-summary-btn { opacity: 1; }
+.day-header:hover .gap-find-btn { opacity: 1; }
+.day-summary-table th { font-size: 0.72rem; color: var(--text-muted); text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
+.day-summary-table td { font-size: 0.82rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(44,51,64,0.4); vertical-align: top; }
+.day-summary-table .td-ado { font-family: var(--mono); font-weight: 700; text-align: right; white-space: nowrap; }
+.day-summary-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.day-summary-total-label { font-size: 0.82rem; color: var(--text-muted); }
+.day-summary-total-label strong { color: var(--text); font-family: var(--mono); }
+.log-actions {
+  display: flex; justify-content: flex-end; margin-top: 1rem;
+  padding-top: 0.75rem; border-top: 1px solid var(--border);
+}
+
+/* ── Toasts ── */
+.toast-wrap {
+  position: fixed; bottom: 1.25rem; right: 1.25rem;
+  display: flex; flex-direction: column; gap: 0.4rem; z-index: 200;
+}
+.toast {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.78rem; color: var(--text);
+  max-width: 260px;
+  animation: toast-in 0.18s ease-out forwards;
+}
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.info    { border-left: 3px solid var(--blue); }
+@keyframes toast-in {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* ── Input shared ── */
+.input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--ui); font-size: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  outline: none; transition: border-color 0.15s;
+}
+.input::placeholder { color: var(--text-muted); }
+.input:focus { border-color: var(--accent); }
+
+/* ── Publish modal ── */
+.publish-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
+.publish-table th {
+  font-family: var(--mono); font-size: 0.58rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
+  text-align: left; padding: 0 0.5rem 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.publish-table td { padding: 0.5rem 0.5rem 0.5rem 0; vertical-align: middle; border-bottom: 1px solid rgba(44,51,64,0.55); }
+.publish-table tr:last-child td { border-bottom: none; }
+.pub-stepper { display: flex; align-items: center; gap: 0.35rem; }
+.pub-stepper-val {
+  font-family: var(--mono); font-size: 0.88rem; font-weight: 600;
+  color: var(--text); min-width: 3.2rem; text-align: center;
+}
+.pub-local { font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+.publish-totals {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.6rem 0; border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.publish-totals-label { color: var(--text-muted); font-family: var(--mono); font-size: 0.72rem; }
+.publish-totals-val   { font-family: var(--mono); font-weight: 700; color: var(--text); }
+.publish-summary-box {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.75rem 0.9rem;
+  font-family: var(--mono); font-size: 0.72rem;
+  white-space: pre; overflow-x: auto; color: var(--text); margin: 0.35rem 0;
+}
+.publish-result-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0; border-bottom: 1px solid rgba(44,51,64,0.55);
+  font-size: 0.8rem;
+}
+.publish-result-row:last-child { border-bottom: none; }
+.pr-task  { font-family: var(--mono); font-size: 0.7rem; color: var(--accent); min-width: 3.5rem; flex-shrink: 0; }
+.pr-title { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-hours { font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.pr-status { font-size: 0.72rem; flex-shrink: 0; min-width: 4rem; text-align: right; }
+.pr-status.ok    { color: var(--green); }
+.pr-status.err   { color: var(--red); }
+.pr-status.local { color: var(--text-muted); }
+.synced-dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green); margin-left: 4px; vertical-align: middle;
+}
+
+/* ── Start time / active edit ── */
+.started-wrap { display: flex; align-items: center; gap: 0.4rem; }
+.started-edit-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--border); font-size: 0.78rem; line-height: 1; padding: 0.1rem;
+  transition: color 0.15s;
+}
+.started-edit-btn:hover { color: var(--text-muted); }
+.started-time-input {
+  width: 5.5rem; font-family: var(--mono); font-size: 0.75rem;
+  padding: 0.25rem 0.45rem;
+  background: var(--surface-2); border: 1px solid var(--accent);
+  border-radius: var(--r); color: var(--text); outline: none;
+}
+.start-time-row {
+  display: flex; align-items: center; gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+.start-time-label { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.start-time-err   { font-size: 0.72rem; color: var(--red); }
+.notify-warn      { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; }
+.work-hours-row   { display: flex; align-items: center; gap: 0.5rem; }
+.work-hours-sep   { font-size: 0.78rem; color: var(--text-muted); }
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem; background: var(--ground);
+  position: sticky; top: 57px; z-index: 9;
+}
+.tab-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--ui); font-size: 0.78rem; font-weight: 600;
+  color: var(--text-muted); padding: 0.6rem 1.1rem;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Retro board ── */
+.retro-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  margin-top: 1rem;
+}
+@media (max-width: 560px) { .retro-grid { grid-template-columns: 1fr; } }
+.retro-bucket {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 1rem;
+}
+.retro-bucket-header {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; font-weight: 700; color: var(--text);
+  margin-bottom: 0.75rem;
+}
+.retro-bucket-emoji { font-size: 1rem; }
+.retro-add-row { display: flex; gap: 0.4rem; margin-bottom: 0.65rem; }
+.retro-add-row input {
+  flex: 1; font-family: var(--ui); font-size: 0.8rem;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--text); padding: 0.35rem 0.5rem;
+}
+.retro-add-row input:focus { outline: none; border-color: var(--accent); }
+.retro-items { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+.retro-item {
+  display: flex; align-items: flex-start; gap: 0.4rem;
+  font-size: 0.8rem; color: var(--text); line-height: 1.4;
+  background: var(--surface-2); border-radius: var(--r); padding: 0.35rem 0.5rem;
+}
+.retro-item-text { flex: 1; }
+.retro-del {
+  background: none; border: none; cursor: pointer;
+  color: var(--border); font-size: 0.8rem; padding: 0; line-height: 1;
+  flex-shrink: 0; transition: color 0.15s;
+}
+.retro-del:hover { color: var(--red); }
+.retro-empty { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.retro-footer {
+  display: flex; justify-content: flex-end; margin-top: 1.5rem;
+  padding-top: 0.75rem; border-top: 1px solid var(--border);
+}
+
+/* ── TODO ── */
+.todo-add-wrap { position: relative; margin-bottom: 1rem; }
+.todo-add-row { display: flex; gap: 0.4rem; }
+.todo-add-row input {
+  flex: 1; font-family: var(--ui); font-size: 0.82rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); color: var(--text); padding: 0.4rem 0.6rem;
+}
+.todo-add-row input:focus { outline: none; border-color: var(--accent); }
+.todo-chip {
+  display: flex; align-items: center; gap: 0.4rem;
+  margin-top: 0.4rem; padding: 0.25rem 0.5rem;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); font-size: 0.75rem;
+}
+.todo-chip-id { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+.todo-chip-title { color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-chip-clear { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.8rem; padding: 0; line-height: 1; }
+.todo-chip-clear:hover { color: var(--red); }
+.todo-dropdown {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); z-index: 50; max-height: 220px; overflow-y: auto;
+}
+.todo-list { list-style: none; display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem; }
+.todo-item {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.45rem 0.6rem;
+}
+.todo-item.done { opacity: 0.5; }
+.todo-item.done .todo-item-title { text-decoration: line-through; color: var(--text-muted); }
+.todo-cb { margin-top: 0.15rem; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.todo-item-body { flex: 1; min-width: 0; }
+.todo-item-meta { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.1rem; }
+.todo-item-title { font-size: 0.82rem; color: var(--text); word-break: break-word; }
+.todo-item-del { background: none; border: none; cursor: pointer; color: var(--border); font-size: 0.8rem; padding: 0; line-height: 1; flex-shrink: 0; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+.todo-item:hover .todo-item-del { opacity: 1; }
+.todo-item-del:hover { color: var(--red); }
+.todo-footer { display: flex; justify-content: flex-end; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.todo-empty { font-size: 0.8rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .timer-display { font-size: 2.25rem; }
+  .td-title { max-width: 100px; }
+  main { padding: 1rem 0.875rem; }
+}
+</style>
+</head>
+<body class="pre-auth">
+
+<!-- Auth screen -->
+<div id="auth-screen">
+  <div class="auth-panel">
+    <div class="auth-logo">PUNCH</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="auth-tab-signin" data-auth-tab="signin">Sign in</button>
+      <button class="auth-tab" id="auth-tab-signup" data-auth-tab="signup">Sign up</button>
+    </div>
+    <div id="auth-error" class="auth-error hidden"></div>
+    <div id="auth-status" class="auth-status hidden"></div>
+    <div class="form-row">
+      <label class="form-label" for="auth-email">Email</label>
+      <input type="email" id="auth-email" class="input" autocomplete="email" placeholder="you@example.com">
+    </div>
+    <div class="form-row" id="auth-password-row">
+      <label class="form-label" for="auth-password">Password</label>
+      <input type="password" id="auth-password" class="input" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="auth-submit-btn">Sign in</button>
+    <div class="auth-links">
+      <button type="button" class="link-btn" id="auth-magic-link-btn">Email me a magic link instead</button>
+      <button type="button" class="link-btn" id="auth-forgot-btn">Forgot password?</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settings-modal" class="modal-overlay hidden">
+  <div class="modal-panel">
+    <div class="modal-title">Settings</div>
+    <div class="form-row">
+      <label class="form-label" for="pat-input">Azure DevOps Personal Access Token</label>
+      <input type="password" id="pat-input" class="input"
+        placeholder="Paste PAT — needs Work Items (Read &amp; Write) scope"
+        autocomplete="off" spellcheck="false">
+    </div>
+    <label class="checkbox-row">
+      <input type="checkbox" id="remember-pat" checked>
+      Remember PAT (synced to your account)
+    </label>
+    <div class="form-row">
+      <label class="form-label" for="week-start-select">Week starts on</label>
+      <select id="week-start-select" class="input">
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="round-select">Time rounding</label>
+      <select id="round-select" class="input">
+        <option value="1">1 minute (no rounding)</option>
+        <option value="6">6 minutes (0.1h)</option>
+        <option value="15">15 minutes (0.25h)</option>
+        <option value="30">30 minutes (0.5h)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="gap-threshold-select">Gap detection threshold</label>
+      <select id="gap-threshold-select" class="input">
+        <option value="5">5 minutes</option>
+        <option value="10">10 minutes</option>
+        <option value="15">15 minutes</option>
+        <option value="20">20 minutes</option>
+        <option value="30">30 minutes</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Work hours</label>
+      <div class="work-hours-row">
+        <input type="time" id="work-start-input" class="input" style="width:auto">
+        <span class="work-hours-sep">to</span>
+        <input type="time" id="work-end-input" class="input" style="width:auto">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="notify-select">Remind me if not tracking</label>
+      <select id="notify-select" class="input">
+        <option value="0">Off</option>
+        <option value="3">Every 3 minutes</option>
+        <option value="5">Every 5 minutes</option>
+        <option value="10">Every 10 minutes</option>
+        <option value="15">Every 15 minutes</option>
+        <option value="20">Every 20 minutes</option>
+        <option value="30">Every 30 minutes</option>
+      </select>
+    </div>
+    <div id="notify-warn" class="notify-warn hidden">⚠ Notifications blocked — allow them in browser settings.</div>
+    <div id="notify-status" class="notify-warn hidden"></div>
+    <div style="margin-top:0.5rem"><button class="btn btn-ghost btn-sm" id="notify-test-btn">Send test notification</button></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="settings-cancel">Cancel</button>
+      <button class="btn btn-primary" id="settings-save">Save &amp; load tasks</button>
+    </div>
+  </div>
+</div>
+
+<!-- Publish modal -->
+<div id="publish-modal" class="modal-overlay hidden">
+  <div class="modal-panel" style="width:min(560px,92vw)">
+    <div class="modal-title">Publish Today</div>
+    <div id="publish-date" style="font-size:0.8rem;color:var(--text-muted);margin-top:-0.3rem"></div>
+    <div id="publish-body" style="max-height:55vh;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="publish-cancel">Cancel</button>
+      <button class="btn btn-primary" id="publish-do">Publish to ADO</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toasts" class="toast-wrap"></div>
+
+<!-- Header -->
+<header class="app-shell">
+  <span class="app-name">PUNCH</span>
+  <div class="header-right">
+    <span class="sync-label" id="sync-label"></span>
+    <span class="user-email-label" id="user-email-label"></span>
+    <button class="btn btn-ghost" id="publish-btn" style="font-size:0.72rem;padding:0.35rem 0.85rem;">Publish</button>
+    <button class="icon-btn" id="refresh-btn" title="Refresh tasks from ADO" aria-label="Refresh tasks">↻</button>
+    <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Open settings">⚙</button>
+    <button class="icon-btn" id="signout-btn" title="Sign out" aria-label="Sign out">⏻</button>
+  </div>
+</header>
+
+<div class="tab-bar app-shell">
+  <button class="tab-btn active" data-tab="timer">Timer</button>
+  <button class="tab-btn" data-tab="retro">Retro</button>
+  <button class="tab-btn" data-tab="todo">TODO</button>
+</div>
+
+<main class="app-shell">
+<div id="tab-timer" class="tab-panel active">
+
+  <!-- Active timer card -->
+  <div id="active-card" class="active-card hidden" role="region" aria-live="polite" aria-label="Active timer">
+    <div class="active-eyebrow">Active</div>
+    <div>
+      <div class="active-id"     id="active-id"></div>
+      <div class="active-title"  id="active-title"></div>
+      <div class="active-type"   id="active-type"></div>
+      <div class="active-parent hidden" id="active-parent"></div>
+    </div>
+    <div class="timer-display" id="timer-display" aria-label="Elapsed time">00:00:00</div>
+    <div class="active-footer">
+      <div class="started-wrap">
+        <span class="started-label" id="started-at"></span>
+        <button class="started-edit-btn" id="started-edit-btn" title="Edit start time" aria-label="Edit start time">✎</button>
+        <input type="time" id="started-time-input" class="started-time-input hidden" aria-label="Edit start time">
+      </div>
+      <button class="btn btn-danger" id="stop-btn">Stop</button>
+    </div>
+    <div class="comment-input-wrap">
+      <textarea id="active-note" placeholder="Notes (optional)…"></textarea>
+    </div>
+  </div>
+
+  <!-- Confirm / ADO sync card -->
+  <div id="confirm-card" class="confirm-card hidden" role="region" aria-label="Log entry">
+    <div class="confirm-eyebrow">Log entry</div>
+    <div>
+      <div class="confirm-id"    id="confirm-id"></div>
+      <div class="confirm-title" id="confirm-title"></div>
+    </div>
+    <div>
+      <div class="duration-stepper">
+        <button class="stepper-btn" id="stepper-down" aria-label="Subtract 5 minutes">−</button>
+        <input type="number" id="stepper-value" class="stepper-input" min="1" step="1" aria-label="Logged minutes">
+        <span class="stepper-unit">min</span>
+        <button class="stepper-btn" id="stepper-up" aria-label="Add 5 minutes">+</button>
+      </div>
+      <div class="actual-elapsed" id="actual-elapsed"></div>
+    </div>
+    <div class="comment-input-wrap">
+      <textarea id="stop-comment" placeholder="Notes (optional)…"></textarea>
+    </div>
+    <div class="confirm-footer">
+      <button class="btn btn-ghost"   id="cancel-stop-btn">Resume timer</button>
+      <button class="btn btn-primary" id="save-entry-btn">Save</button>
+    </div>
+  </div>
+
+  <!-- Daily Summary Modal -->
+  <div id="day-summary-modal" class="modal-overlay hidden">
+    <div class="modal-panel" style="width:min(680px,95vw);max-height:80vh;overflow-y:auto">
+      <div class="modal-title" id="day-summary-title"></div>
+      <table class="log-table day-summary-table" id="day-summary-table" style="width:100%;margin-top:0.75rem"></table>
+      <div class="day-summary-footer">
+        <span id="day-summary-total" class="day-summary-total-label"></span>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-ghost btn-sm" id="day-summary-copy">Copy</button>
+          <button class="btn btn-ghost" id="day-summary-close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- New entry -->
+  <div id="new-entry" class="section-card">
+    <div class="section-eyebrow">Start timer</div>
+    <div id="loading-row" class="loading-row hidden">
+      <div class="spinner"></div>
+      Fetching tasks from ADO&hellip;
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="task-search" class="task-input"
+        placeholder="Type a task ID or title&hellip;"
+        autocomplete="off" spellcheck="false"
+        aria-label="Search work items" aria-autocomplete="list" aria-controls="task-dropdown">
+      <div id="task-dropdown" class="dropdown hidden" role="listbox" aria-label="Work item results"></div>
+    </div>
+    <div id="selected-chip" class="chip hidden">
+      <span class="chip-id"   id="chip-id"></span>
+      <span class="chip-title" id="chip-title"></span>
+      <button class="chip-x" id="chip-clear" aria-label="Clear selection">×</button>
+    </div>
+    <div id="start-time-row" class="start-time-row hidden">
+      <span class="start-time-label">Start at</span>
+      <input type="time" id="start-time-input" class="input" style="width:auto;font-family:var(--mono);font-size:0.82rem;padding:0.35rem 0.6rem;">
+      <span id="start-time-err" class="start-time-err hidden"></span>
+    </div>
+    <div class="comment-input-wrap hidden" id="pre-note-wrap">
+      <textarea id="pre-note" placeholder="Notes (optional)…"></textarea>
+    </div>
+    <div class="entry-footer">
+      <button class="btn btn-ghost" id="configure-btn">Configure PAT</button>
+      <button class="btn btn-primary" id="start-btn" disabled>Start</button>
+    </div>
+  </div>
+
+  <!-- Weekly log -->
+  <div class="section-card">
+    <div class="week-nav">
+      <button class="icon-btn" id="week-prev" aria-label="Previous week">←</button>
+      <span id="week-label" class="week-label"></span>
+      <button class="icon-btn" id="week-next" aria-label="Next week">→</button>
+    </div>
+    <div class="week-summary">
+      <span class="week-summary-label">Week total</span>
+      <span id="week-total" class="week-summary-total"></span>
+    </div>
+    <div id="log-body"></div>
+    <div id="log-actions" class="log-actions hidden">
+      <button class="btn btn-ghost" id="export-btn" style="font-size:0.72rem;padding:0.35rem 0.85rem;">Export week CSV</button>
+    </div>
+  </div>
+
+</div><!-- /tab-timer -->
+
+<div id="tab-retro" class="tab-panel">
+  <div class="retro-grid">
+    <div class="retro-bucket">
+      <div class="retro-bucket-header"><span class="retro-bucket-emoji">✅</span> Went Well</div>
+      <div class="retro-add-row">
+        <input type="text" id="retro-well-input" placeholder="Add item…" autocomplete="off">
+        <button class="btn btn-sm btn-ghost" data-retro-add="well">Add</button>
+      </div>
+      <ul class="retro-items" id="retro-well-list"></ul>
+    </div>
+    <div class="retro-bucket">
+      <div class="retro-bucket-header"><span class="retro-bucket-emoji">🔧</span> Didn't Go Well</div>
+      <div class="retro-add-row">
+        <input type="text" id="retro-improve-input" placeholder="Add item…" autocomplete="off">
+        <button class="btn btn-sm btn-ghost" data-retro-add="improve">Add</button>
+      </div>
+      <ul class="retro-items" id="retro-improve-list"></ul>
+    </div>
+    <div class="retro-bucket">
+      <div class="retro-bucket-header"><span class="retro-bucket-emoji">📋</span> Action Items</div>
+      <div class="retro-add-row">
+        <input type="text" id="retro-action-input" placeholder="Add item…" autocomplete="off">
+        <button class="btn btn-sm btn-ghost" data-retro-add="action">Add</button>
+      </div>
+      <ul class="retro-items" id="retro-action-list"></ul>
+    </div>
+    <div class="retro-bucket">
+      <div class="retro-bucket-header"><span class="retro-bucket-emoji">🌟</span> Shout-Out</div>
+      <div class="retro-add-row">
+        <input type="text" id="retro-shoutout-input" placeholder="Add item…" autocomplete="off">
+        <button class="btn btn-sm btn-ghost" data-retro-add="shoutout">Add</button>
+      </div>
+      <ul class="retro-items" id="retro-shoutout-list"></ul>
+    </div>
+  </div>
+  <div class="retro-footer">
+    <button class="btn btn-ghost btn-sm" id="retro-clear-btn">Clear all</button>
+  </div>
+</div><!-- /tab-retro -->
+
+<div id="tab-todo" class="tab-panel">
+  <div class="todo-add-wrap">
+    <div class="todo-add-row">
+      <input type="text" id="todo-search" placeholder="Search work item or type free text…" autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary btn-sm" id="todo-add-btn">Add</button>
+    </div>
+    <div id="todo-chip" class="todo-chip hidden">
+      <span class="todo-chip-id" id="todo-chip-id"></span>
+      <span class="todo-chip-title" id="todo-chip-title"></span>
+      <button class="todo-chip-clear" id="todo-chip-clear">×</button>
+    </div>
+    <div id="todo-dropdown" class="todo-dropdown hidden"></div>
+  </div>
+  <ul class="todo-list" id="todo-list"></ul>
+  <div class="todo-footer">
+    <button class="btn btn-ghost btn-sm" id="todo-clear-done-btn">Clear completed</button>
+  </div>
+</div><!-- /tab-todo -->
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(function () {
+  // ── Supabase ─────────────────────────────────────────────
+  const SUPABASE_URL = 'https://zcjegwrzaxklezbuvkoo.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjamVnd3J6YXhrbGV6YnV2a29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5MzI2MjksImV4cCI6MjEwMTUwODYyOX0.I8Ps94H-5YCm066Hk1CBfvsmmdXDvVW2el3PJH-M21o';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let currentUser = null;
+  let suppressSync = false;
+  const _debounceTimers = {};
+  function debounceSync(key, fn, delay) {
+    clearTimeout(_debounceTimers[key]);
+    _debounceTimers[key] = setTimeout(fn, delay || 500);
+  }
+  'use strict';
+
+  // ── Storage keys ──────────────────────────────────────────
+  const K = {
+    PAT:             'punch_pat',
+    TASKS:           'punch_tasks',
+    FETCHED:         'punch_tasks_fetched',
+    ACTIVE:          'punch_active',
+    LOG:             'punch_log',
+    WEEK_START:      'punch_week_start',
+    NOTIFY_INTERVAL: 'punch_notify_int',
+    WORK_START:      'punch_work_start',
+    WORK_END:        'punch_work_end',
+    ROUND_INCREMENT: 'punch_round_inc',
+    RETRO:           'punch_retro',
+    TODO:            'punch_todo',
+    GAP_THRESHOLD:   'punch_gap_threshold',
+  };
+
+  const ORG     = 'storee';
+  const PROJECT = 'Storee Product Development';
+  const BASE    = `https://dev.azure.com/${ORG}/${encodeURIComponent(PROJECT)}/_apis`;
+  const TTL     = 3600 * 1000; // 1 hour
+
+  // ── State ────────────────────────────────────────────────
+  let tasks          = [];
+  let selectedTask   = null;
+  let timerIv        = null;
+  let focusedIdx     = -1;
+  let currentResults = [];
+  let pendingStop    = null;
+  let weekOffset     = 0;
+  let expandedDays   = new Set();
+  let gapsVisible    = false;
+  let publishItems   = [];
+  let drillStory     = null;
+  let startOverride  = null;
+  let notifyIv       = null;
+  let lastNotifiedAt = 0;
+
+  // ── DOM ──────────────────────────────────────────────────
+  function $  (id) { return document.getElementById(id); }
+
+  const settingsModal = $('settings-modal');
+  const patInput      = $('pat-input');
+  const rememberPat   = $('remember-pat');
+  const settingsSave  = $('settings-save');
+  const settingsCancel= $('settings-cancel');
+  const settingsBtn   = $('settings-btn');
+  const configureBtn  = $('configure-btn');
+  const refreshBtn    = $('refresh-btn');
+  const syncLabel     = $('sync-label');
+
+  const activeCard        = $('active-card');
+  const activeId          = $('active-id');
+  const activeTitle       = $('active-title');
+  const activeType        = $('active-type');
+  const activeParent      = $('active-parent');
+  const startedEditBtn    = $('started-edit-btn');
+  const startedTimeInput  = $('started-time-input');
+  const timerDisplay= $('timer-display');
+  const startedAt   = $('started-at');
+  const stopBtn     = $('stop-btn');
+
+  const confirmCard   = $('confirm-card');
+  const confirmId     = $('confirm-id');
+  const confirmTitle  = $('confirm-title');
+  const stepperValue  = $('stepper-value');
+  const stepperDown   = $('stepper-down');
+  const stepperUp     = $('stepper-up');
+  const actualElapsed = $('actual-elapsed');
+  const cancelStopBtn = $('cancel-stop-btn');
+  const saveEntryBtn  = $('save-entry-btn');
+  const stopComment   = $('stop-comment');
+
+  const publishModal  = $('publish-modal');
+  const publishDate   = $('publish-date');
+  const publishBody   = $('publish-body');
+  const publishCancel = $('publish-cancel');
+  const publishDo     = $('publish-do');
+
+  const newEntry    = $('new-entry');
+  const loadingRow  = $('loading-row');
+  const taskSearch  = $('task-search');
+  const taskDropdown= $('task-dropdown');
+  const selectedChip= $('selected-chip');
+  const chipId      = $('chip-id');
+  const chipTitle   = $('chip-title');
+  const chipClear   = $('chip-clear');
+  const startBtn    = $('start-btn');
+  const preNoteWrap = $('pre-note-wrap');
+  const preNote     = $('pre-note');
+  const activeNote  = $('active-note');
+
+  const weekLabel       = $('week-label');
+  const weekTotalEl     = $('week-total');
+  const weekPrev        = $('week-prev');
+  const weekNext        = $('week-next');
+  const weekStartSelect = $('week-start-select');
+  const roundSelect          = $('round-select');
+  const gapThresholdSelect   = $('gap-threshold-select');
+  const workStartInput  = $('work-start-input');
+  const workEndInput    = $('work-end-input');
+  const notifySelect    = $('notify-select');
+  const notifyWarn      = $('notify-warn');
+  const notifyStatus    = $('notify-status');
+  const notifyTestBtn   = $('notify-test-btn');
+  const startTimeRow    = $('start-time-row');
+  const startTimeInput  = $('start-time-input');
+  const startTimeErr    = $('start-time-err');
+  const logBody     = $('log-body');
+  const logActions  = $('log-actions');
+  const exportBtn   = $('export-btn');
+  const toastWrap   = $('toasts');
+
+  // ── Storage helpers ──────────────────────────────────────
+  function load(key, fallback) {
+    try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  }
+  function save(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    queueCloudSync(key, val);
+  }
+  function drop(key) {
+    try { localStorage.removeItem(key); } catch {}
+    if (!currentUser || suppressSync) return;
+    if (key === K.ACTIVE) pushActive(null);
+    if (key === K.PAT) debounceSync('settings', pushSettings);
+  }
+
+  // ── Cloud sync ───────────────────────────────────────────
+  const SETTINGS_KEYS = new Set([
+    K.WEEK_START, K.ROUND_INCREMENT, K.GAP_THRESHOLD,
+    K.WORK_START, K.WORK_END, K.NOTIFY_INTERVAL, K.PAT,
+  ]);
+
+  function queueCloudSync(key, val) {
+    if (!currentUser || suppressSync) return;
+    if (key === K.LOG)   { debounceSync('log',   () => pushLog(val));   return; }
+    if (key === K.RETRO) { debounceSync('retro', () => pushRetro(val)); return; }
+    if (key === K.TODO)  { debounceSync('todo',  () => pushTodo(val));  return; }
+    if (key === K.ACTIVE) { pushActive(val); return; }
+    if (SETTINGS_KEYS.has(key)) { debounceSync('settings', pushSettings); return; }
+    // K.TASKS / K.FETCHED — local API cache only, not synced
+  }
+
+  async function pushLog(log) {
+    if (!currentUser) return;
+    const rows = (log || []).map(e => ({
+      user_id: currentUser.id,
+      task_id: e.taskId ?? null, task_title: e.taskTitle, task_type: e.taskType ?? null,
+      parent_id: e.parentId ?? null, parent_title: e.parentTitle ?? null,
+      date: e.date, start_time: e.startTime, end_time: e.endTime,
+      duration: e.duration, actual_duration: e.actualDuration ?? null,
+      comment: e.comment ?? null, synced_to_ado: !!e.syncedToAdo,
+    }));
+    try {
+      await sb.from('log_entries').delete().eq('user_id', currentUser.id);
+      if (rows.length) await sb.from('log_entries').insert(rows);
+    } catch (err) { console.warn('log sync failed', err); }
+  }
+
+  async function pushRetro(items) {
+    if (!currentUser) return;
+    const rows = (items || []).map(i => ({
+      id: String(i.id), user_id: currentUser.id, bucket: i.bucket, item_text: i.text,
+    }));
+    try {
+      await sb.from('retro_items').delete().eq('user_id', currentUser.id);
+      if (rows.length) await sb.from('retro_items').insert(rows);
+    } catch (err) { console.warn('retro sync failed', err); }
+  }
+
+  async function pushTodo(items) {
+    if (!currentUser) return;
+    const rows = (items || []).map(i => ({
+      id: String(i.id), user_id: currentUser.id, item_text: i.text,
+      task_id: i.taskId ?? null, task_title: i.taskTitle ?? null,
+      parent_id: i.parentId ?? null, parent_title: i.parentTitle ?? null, done: !!i.done,
+    }));
+    try {
+      await sb.from('todo_items').delete().eq('user_id', currentUser.id);
+      if (rows.length) await sb.from('todo_items').insert(rows);
+    } catch (err) { console.warn('todo sync failed', err); }
+  }
+
+  async function pushActive(entry) {
+    if (!currentUser) return;
+    try {
+      if (!entry) { await sb.from('active_timer').delete().eq('user_id', currentUser.id); return; }
+      await sb.from('active_timer').upsert({
+        user_id: currentUser.id,
+        task_id: entry.taskId ?? null, task_title: entry.taskTitle, task_type: entry.taskType ?? null,
+        parent_id: entry.parentId ?? null, parent_title: entry.parentTitle ?? null,
+        start_time: entry.startTime, note: entry.note ?? null, updated_at: new Date().toISOString(),
+      });
+    } catch (err) { console.warn('active sync failed', err); }
+  }
+
+  async function pushSettings() {
+    if (!currentUser) return;
+    const pat = load(K.PAT, '');
+    try {
+      await sb.from('settings').upsert({
+        user_id: currentUser.id,
+        week_start: load(K.WEEK_START, 0),
+        round_increment: load(K.ROUND_INCREMENT, 30),
+        gap_threshold: load(K.GAP_THRESHOLD, 15),
+        work_start: load(K.WORK_START, ''),
+        work_end: load(K.WORK_END, ''),
+        notify_interval: load(K.NOTIFY_INTERVAL, 0),
+        ado_pat: pat || null,
+        remember_pat: !!pat,
+        updated_at: new Date().toISOString(),
+      });
+    } catch (err) { console.warn('settings sync failed', err); }
+  }
+
+  async function pullFromCloud() {
+    suppressSync = true;
+    const uid = currentUser.id;
+    try {
+      const [settingsRes, activeRes, logRes, retroRes, todoRes] = await Promise.all([
+        sb.from('settings').select('*').eq('user_id', uid).maybeSingle(),
+        sb.from('active_timer').select('*').eq('user_id', uid).maybeSingle(),
+        sb.from('log_entries').select('*').eq('user_id', uid).order('start_time', { ascending: true }),
+        sb.from('retro_items').select('*').eq('user_id', uid),
+        sb.from('todo_items').select('*').eq('user_id', uid),
+      ]);
+
+      const s = settingsRes.data;
+      if (s) {
+        localStorage.setItem(K.WEEK_START, JSON.stringify(s.week_start ?? 0));
+        localStorage.setItem(K.ROUND_INCREMENT, JSON.stringify(s.round_increment ?? 30));
+        localStorage.setItem(K.GAP_THRESHOLD, JSON.stringify(s.gap_threshold ?? 15));
+        localStorage.setItem(K.WORK_START, JSON.stringify(s.work_start ?? ''));
+        localStorage.setItem(K.WORK_END, JSON.stringify(s.work_end ?? ''));
+        localStorage.setItem(K.NOTIFY_INTERVAL, JSON.stringify(s.notify_interval ?? 0));
+        if (s.remember_pat && s.ado_pat) localStorage.setItem(K.PAT, JSON.stringify(s.ado_pat));
+        else localStorage.removeItem(K.PAT);
+      }
+
+      const a = activeRes.data;
+      localStorage.setItem(K.ACTIVE, a ? JSON.stringify({
+        taskId: a.task_id, taskTitle: a.task_title, taskType: a.task_type,
+        parentId: a.parent_id, parentTitle: a.parent_title,
+        startTime: a.start_time, note: a.note,
+      }) : 'null');
+
+      const logRows = logRes.data || [];
+      localStorage.setItem(K.LOG, JSON.stringify(logRows.map(r => ({
+        taskId: r.task_id, taskTitle: r.task_title, taskType: r.task_type,
+        parentId: r.parent_id, parentTitle: r.parent_title,
+        date: r.date, startTime: r.start_time, endTime: r.end_time,
+        duration: r.duration, actualDuration: r.actual_duration,
+        comment: r.comment, syncedToAdo: !!r.synced_to_ado,
+      }))));
+
+      const retroRows = retroRes.data || [];
+      localStorage.setItem(K.RETRO, JSON.stringify(retroRows.map(r => ({
+        id: r.id, bucket: r.bucket, text: r.item_text,
+      }))));
+
+      const todoRows = todoRes.data || [];
+      localStorage.setItem(K.TODO, JSON.stringify(todoRows.map(r => ({
+        id: r.id, text: r.item_text, taskId: r.task_id, taskTitle: r.task_title,
+        parentId: r.parent_id, parentTitle: r.parent_title, done: !!r.done,
+      }))));
+    } catch (err) {
+      console.warn('cloud pull failed', err);
+    } finally {
+      suppressSync = false;
+    }
+  }
+
+  // ── Formatting ───────────────────────────────────────────
+  function fmt(ms) {
+    const s = Math.floor(ms / 1000);
+    return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
+      .map(n => String(n).padStart(2, '0')).join(':');
+  }
+  function fmtHM(ms) {
+    const m = Math.floor(ms / 60000), h = Math.floor(m / 60), r = m % 60;
+    return h === 0 ? `${r}m` : r === 0 ? `${h}h` : `${h}h ${r}m`;
+  }
+  const THIRTY_MIN = 30 * 60 * 1000;
+  function getRoundMs() { return load(K.ROUND_INCREMENT, 30) * 60 * 1000; }
+  function roundToInterval(ms) { const r = getRoundMs(); return Math.max(r, Math.round(ms / r) * r); }
+  function roundToNearest30(ms) { return roundToInterval(ms); }
+
+  function hoursToHM(h) {
+    if (h == null || isNaN(h)) return '—';
+    const totalMin = Math.round(h * 60);
+    const hh = Math.floor(totalMin / 60), mm = totalMin % 60;
+    return hh === 0 ? `${mm}m` : mm === 0 ? `${hh}h` : `${hh}h ${mm}m`;
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  function dateKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function todayKey() { return dateKey(new Date()); }
+
+  function getWeekDates(offset, startDay) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dow = today.getDay(); // 0=Sun
+    const diff = (dow - startDay + 7) % 7;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - diff + offset * 7);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart); d.setDate(weekStart.getDate() + i); return d;
+    });
+  }
+
+  function fmtWeekLabel(dates) {
+    const s = dates[0], e = dates[6];
+    const sm = s.toLocaleDateString([], { month: 'short' }).toUpperCase();
+    const em = e.toLocaleDateString([], { month: 'short' }).toUpperCase();
+    return sm === em
+      ? `${sm} ${s.getDate()} – ${e.getDate()}`
+      : `${sm} ${s.getDate()} – ${em} ${e.getDate()}`;
+  }
+
+  function fmtDayHeader(d) {
+    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Toast ────────────────────────────────────────────────
+  function toast(msg, type, dur) {
+    const el = document.createElement('div');
+    el.className = `toast ${type || 'info'}`;
+    el.textContent = msg;
+    toastWrap.appendChild(el);
+    setTimeout(() => el.remove(), dur || 3200);
+  }
+
+  // ── Time input helpers ───────────────────────────────────
+  function tsToTimeInput(ts) {
+    const d = new Date(ts);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  function timeInputToTs(val) {
+    if (!val) return null;
+    const [h, m] = val.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    return d.getTime();
+  }
+  function getMinStartTs() {
+    const entries = load(K.LOG, []).filter(e => e.date === todayKey());
+    return entries.length ? Math.max(...entries.map(e => e.endTime)) : null;
+  }
+
+  // ── ADO API ──────────────────────────────────────────────
+  function getPat() { return load(K.PAT, ''); }
+  function authHeader(pat) { return 'Basic ' + btoa(':' + pat); }
+
+  async function fetchFromADO(pat) {
+    const wiqlResp = await fetch(`${BASE}/wit/wiql?api-version=7.1`, {
+      method: 'POST',
+      headers: { 'Authorization': authHeader(pat), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `SELECT [System.Id] FROM WorkItems WHERE [System.AssignedTo] = @Me AND [System.State] NOT IN ('Closed','Completed','Removed') ORDER BY [System.ChangedDate] DESC`
+      })
+    });
+    if (wiqlResp.status === 401 || wiqlResp.status === 403) throw new Error('PAT rejected — check your token.');
+    if (!wiqlResp.ok) throw new Error(`ADO returned ${wiqlResp.status}.`);
+
+    const wiql = await wiqlResp.json();
+    const ids  = (wiql.workItems || []).map(w => w.id);
+    if (!ids.length) return [];
+
+    const result = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk  = ids.slice(i, i + 200).join(',');
+      const fields = 'System.Id,System.Title,System.WorkItemType,System.State,System.IterationPath,System.Parent';
+      const resp   = await fetch(`${BASE}/wit/workitems?ids=${chunk}&fields=${fields}&api-version=7.1`, {
+        headers: { 'Authorization': authHeader(pat) }
+      });
+      if (!resp.ok) throw new Error(`Detail fetch failed: ${resp.status}.`);
+      const data = await resp.json();
+      for (const wi of data.value) {
+        const f = wi.fields;
+        result.push({
+          id:       f['System.Id'],
+          title:    f['System.Title'] || '',
+          type:     f['System.WorkItemType'] || '',
+          state:    f['System.State'] || '',
+          iter:     (f['System.IterationPath'] || '').split('\\').pop(),
+          parentId: f['System.Parent'] || null,
+        });
+      }
+    }
+
+    // Attach parent titles — User Story level only
+    const resultMap = {};
+    for (const t of result) resultMap[t.id] = t;
+
+    // Parents already in result set
+    for (const t of result) {
+      if (t.parentId && resultMap[t.parentId] && resultMap[t.parentId].type === 'User Story') {
+        t.parentTitle = resultMap[t.parentId].title;
+      }
+    }
+
+    // Parents not in result set — fetch them
+    const missingParentIds = [...new Set(
+      result.map(t => t.parentId).filter(id => id && !resultMap[id])
+    )];
+    if (missingParentIds.length) {
+      const parentMap = {};
+      for (let i = 0; i < missingParentIds.length; i += 200) {
+        const chunk = missingParentIds.slice(i, i + 200).join(',');
+        const resp  = await fetch(
+          `${BASE}/wit/workitems?ids=${chunk}&fields=System.Id,System.Title,System.WorkItemType&api-version=7.1`,
+          { headers: { 'Authorization': authHeader(pat) } }
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          for (const wi of data.value) {
+            const f = wi.fields;
+            parentMap[f['System.Id']] = { title: f['System.Title'] || '', type: f['System.WorkItemType'] || '' };
+          }
+        }
+      }
+      for (const t of result) {
+        if (t.parentId && parentMap[t.parentId] && parentMap[t.parentId].type === 'User Story') {
+          t.parentTitle = parentMap[t.parentId].title;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  async function loadTasks(force) {
+    const pat     = getPat();
+    const cached  = load(K.TASKS, []);
+    const fetched = load(K.FETCHED, 0);
+    const stale   = Date.now() - fetched > TTL;
+
+    if (!force && !stale && cached.length) {
+      tasks = cached;
+      syncLabel.textContent = `${tasks.length} tasks`;
+      return;
+    }
+
+    if (!pat) {
+      tasks = cached;
+      syncLabel.textContent = tasks.length ? `${tasks.length} cached` : 'no PAT';
+      return;
+    }
+
+    loadingRow.classList.remove('hidden');
+    taskSearch.disabled = true;
+
+    try {
+      const fresh = await fetchFromADO(pat);
+      tasks = fresh;
+      save(K.TASKS, tasks);
+      save(K.FETCHED, Date.now());
+      syncLabel.textContent = `${tasks.length} tasks · ${fmtTime(Date.now())}`;
+      toast(`Loaded ${tasks.length} tasks.`, 'success');
+    } catch (err) {
+      tasks = cached;
+      syncLabel.textContent = 'offline';
+      toast(err.message || 'Failed to fetch tasks.', 'error', 5000);
+    } finally {
+      loadingRow.classList.add('hidden');
+      taskSearch.disabled = false;
+    }
+  }
+
+  // ── ADO scheduling fields ────────────────────────────────
+
+  async function fetchScheduling(taskId, pat) {
+    const fields = [
+      'Microsoft.VSTS.Scheduling.CompletedWork',
+      'Microsoft.VSTS.Scheduling.RemainingWork',
+      'Microsoft.VSTS.Scheduling.OriginalEstimate',
+    ].join(',');
+    const resp = await fetch(
+      `https://dev.azure.com/${ORG}/_apis/wit/workitems/${taskId}?fields=${fields}&api-version=7.1`,
+      { headers: { 'Authorization': authHeader(pat) } }
+    );
+    if (!resp.ok) throw new Error(`ADO returned ${resp.status}`);
+    const data = await resp.json();
+    const f = data.fields;
+    return {
+      completed: f['Microsoft.VSTS.Scheduling.CompletedWork']  ?? 0,
+      remaining: f['Microsoft.VSTS.Scheduling.RemainingWork']  ?? null,
+      original:  f['Microsoft.VSTS.Scheduling.OriginalEstimate'] ?? null,
+    };
+  }
+
+  async function patchScheduling(taskId, newCompleted, newRemaining, pat) {
+    const ops = [
+      { op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.CompletedWork', value: newCompleted },
+    ];
+    if (newRemaining !== null) {
+      ops.push({ op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.RemainingWork', value: newRemaining });
+    }
+    const resp = await fetch(
+      `https://dev.azure.com/${ORG}/${encodeURIComponent(PROJECT)}/_apis/wit/workitems/${taskId}?api-version=7.1`,
+      {
+        method: 'PATCH',
+        headers: { 'Authorization': authHeader(pat), 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify(ops),
+      }
+    );
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      throw new Error(`PATCH failed (${resp.status})${body ? ': ' + body.slice(0, 120) : ''}`);
+    }
+  }
+
+  // ── Typeahead ────────────────────────────────────────────
+  function search(q) {
+    if (!q) return [];
+    const lq = q.toLowerCase().trim();
+    return tasks.filter(t =>
+      String(t.id).startsWith(lq) ||
+      t.title.toLowerCase().includes(lq) ||
+      (t.parentTitle && t.parentTitle.toLowerCase().includes(lq))
+    ).slice(0, 12);
+  }
+
+  const CREATE_SENTINEL = { _create: true };
+  const BACK_SENTINEL   = { _back: true };
+
+  function selectDropdownItem(t) {
+    if (!t) return;
+    if (t._back) {
+      drillStory = null;
+      const q = taskSearch.value.trim();
+      if (q) renderDropdown(search(q), q); else hideDropdown();
+      return;
+    }
+    if (t._create) { pickFreeText(taskSearch.value.trim()); return; }
+    // Drill into User Story if it has children assigned to me
+    if (t.type === 'User Story') {
+      const children = tasks.filter(c => c.parentId === t.id);
+      if (children.length) { drillStory = t; renderDropdown([], taskSearch.value.trim()); return; }
+    }
+    pick(t);
+  }
+
+  function makeTaskItem(t) {
+    const el = document.createElement('div');
+    el.className = 'dropdown-item';
+    el.setAttribute('role', 'option');
+    const children = t.type === 'User Story' ? tasks.filter(c => c.parentId === t.id) : [];
+    const isDrillable = children.length > 0;
+    el.innerHTML = `
+      <span class="di-id">#${esc(t.id)}</span>
+      <span class="di-title">${esc(t.title)}</span>
+      ${isDrillable
+        ? `<span class="di-drill">${children.length} task${children.length !== 1 ? 's' : ''} ▶</span>`
+        : `<span class="di-type">${esc(t.type)}</span>`}
+      ${t.parentTitle ? `<span class="di-parent">↳ ${esc(t.parentTitle)}</span>` : ''}
+    `;
+    el.addEventListener('mousedown', e => { e.preventDefault(); selectDropdownItem(t); });
+    return el;
+  }
+
+  function renderDropdown(results, query) {
+    focusedIdx = -1;
+    taskDropdown.innerHTML = '';
+
+    if (drillStory) {
+      const children = tasks.filter(t => t.parentId === drillStory.id);
+      // Back item
+      const backEl = document.createElement('div');
+      backEl.className = 'dropdown-item';
+      backEl.setAttribute('role', 'option');
+      backEl.innerHTML = `<span class="di-back">← ${esc(drillStory.title)}</span>`;
+      backEl.addEventListener('mousedown', e => { e.preventDefault(); selectDropdownItem(BACK_SENTINEL); });
+      taskDropdown.appendChild(backEl);
+
+      if (children.length) {
+        children.forEach(t => taskDropdown.appendChild(makeTaskItem(t)));
+      } else {
+        const msg = document.createElement('div');
+        msg.className = 'dropdown-msg';
+        msg.textContent = 'No tasks assigned to you under this story.';
+        taskDropdown.appendChild(msg);
+      }
+      currentResults = [BACK_SENTINEL, ...children];
+      taskDropdown.classList.remove('hidden');
+      return;
+    }
+
+    if (results.length) {
+      results.forEach(t => taskDropdown.appendChild(makeTaskItem(t)));
+    } else {
+      const msg = document.createElement('div');
+      msg.className = 'dropdown-msg';
+      msg.textContent = !tasks.length ? 'No tasks loaded — set your PAT in Settings.' : 'No matching tasks.';
+      taskDropdown.appendChild(msg);
+    }
+
+    const createEl = document.createElement('div');
+    createEl.className = 'dropdown-item create-item';
+    createEl.setAttribute('role', 'option');
+    createEl.innerHTML = `<span class="di-create">▶ Start as &ldquo;${esc(query)}&rdquo;</span>`;
+    createEl.addEventListener('mousedown', e => { e.preventDefault(); pickFreeText(query); });
+    taskDropdown.appendChild(createEl);
+
+    currentResults = [...results, CREATE_SENTINEL];
+    taskDropdown.classList.remove('hidden');
+  }
+
+  function hideDropdown() {
+    taskDropdown.classList.add('hidden');
+    focusedIdx = -1;
+    currentResults = [];
+    drillStory = null;
+  }
+
+  function pickFreeText(label) {
+    pick({ id: null, title: label.trim(), type: 'Manual' });
+  }
+
+  function pick(t) {
+    selectedTask = t;
+    taskSearch.value = '';
+    hideDropdown();
+    chipId.textContent = t.id ? `#${t.id}` : '—';
+    chipTitle.textContent = t.title;
+    selectedChip.classList.remove('hidden');
+    startBtn.disabled = false;
+    startOverride = null;
+    startTimeInput.value = tsToTimeInput(Date.now());
+    startTimeErr.classList.add('hidden');
+    startTimeRow.classList.remove('hidden');
+    preNoteWrap.classList.remove('hidden');
+    startBtn.focus();
+  }
+
+  function clearPick() {
+    selectedTask = null;
+    selectedChip.classList.add('hidden');
+    startBtn.disabled = true;
+    startTimeRow.classList.add('hidden');
+    preNoteWrap.classList.add('hidden');
+    preNote.value = '';
+    startOverride = null;
+    taskSearch.value = '';
+    taskSearch.focus();
+  }
+
+  function moveFocus(dir) {
+    const items = taskDropdown.querySelectorAll('.dropdown-item');
+    if (!items.length) return;
+    focusedIdx = Math.max(0, Math.min(items.length - 1, focusedIdx + dir));
+    items.forEach((el, i) => el.classList.toggle('focused', i === focusedIdx));
+    items[focusedIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  // ── Timer ────────────────────────────────────────────────
+  function startTimer() {
+    if (!selectedTask) return;
+    const entry = {
+      taskId:      selectedTask.id,
+      taskTitle:   selectedTask.title,
+      taskType:    selectedTask.type,
+      parentTitle: selectedTask.parentTitle || null,
+      parentId:    selectedTask.parentId || null,
+      startTime:   startOverride || Date.now(),
+      note:        preNote.value.trim() || null,
+    };
+    startOverride = null;
+    save(K.ACTIVE, entry);
+    showActive(entry);
+    clearPick();
+    newEntry.classList.add('hidden');
+  }
+
+  function stopTimer() {
+    const a = load(K.ACTIVE, null);
+    if (!a) return;
+    const end = Date.now();
+    const dur = end - a.startTime;
+    clearInterval(timerIv); timerIv = null;
+    // K.ACTIVE kept until commitEntry — allows Resume timer to work
+    pendingStop = { taskId: a.taskId, taskTitle: a.taskTitle, taskType: a.taskType,
+                   parentTitle: a.parentTitle || null, parentId: a.parentId || null,
+                   startTime: a.startTime, endTime: end, duration: dur,
+                   loggedMs: dur, note: a.note || null };
+    activeCard.classList.add('hidden');
+    showConfirm(pendingStop);
+  }
+
+  function cancelStop() {
+    const active = load(K.ACTIVE, null);
+    if (!active) return;
+    pendingStop = null;
+    confirmCard.classList.add('hidden');
+    showActive(active);
+  }
+
+  const FIVE_MIN = 5 * 60 * 1000;
+
+  function msToMinutes(ms) { return Math.round(ms / 60000); }
+  function minutesToMs(m)  { return m * 60000; }
+
+  function renderStepperValue() {
+    stepperValue.value = msToMinutes(pendingStop.loggedMs);
+    stepperDown.disabled = msToMinutes(pendingStop.loggedMs) <= 5;
+    const diff = pendingStop.loggedMs - pendingStop.duration;
+    actualElapsed.textContent = diff === 0
+      ? `Actual: ${fmtHM(pendingStop.duration)}`
+      : `Actual: ${fmtHM(pendingStop.duration)} — adjusted ${diff > 0 ? '+' : '−'}${fmtHM(Math.abs(diff))}`;
+  }
+
+  function adjustLoggedTime(dir) { // dir: +1 or -1
+    const cur = msToMinutes(pendingStop.loggedMs);
+    const next = dir > 0
+      ? Math.ceil((cur + 1) / 5) * 5
+      : Math.floor((cur - 1) / 5) * 5;
+    if (next < 1) return;
+    pendingStop.loggedMs = minutesToMs(next);
+    renderStepperValue();
+  }
+
+  function onStepperInput() {
+    const raw = parseInt(stepperValue.value, 10);
+    if (isNaN(raw) || raw < 1) return;
+    pendingStop.loggedMs = minutesToMs(raw);
+    stepperDown.disabled = raw <= 5;
+    const diff = pendingStop.loggedMs - pendingStop.duration;
+    actualElapsed.textContent = diff === 0
+      ? `Actual: ${fmtHM(pendingStop.duration)}`
+      : `Actual: ${fmtHM(pendingStop.duration)} — adjusted ${diff > 0 ? '+' : '−'}${fmtHM(Math.abs(diff))}`;
+  }
+
+  const NO_SCHEDULING_TYPES = new Set(['User Story', 'Feature', 'Epic']);
+
+  function showConfirm(stop) {
+    confirmId.textContent    = stop.taskId ? `#${stop.taskId}` : '—';
+    confirmTitle.textContent = stop.taskTitle;
+    stopComment.value = stop.note || '';
+    renderStepperValue();
+    confirmCard.classList.remove('hidden');
+    saveEntryBtn.focus();
+  }
+
+  function commitEntry() {
+    if (!pendingStop) return;
+    const stop = pendingStop;
+    pendingStop = null;
+    confirmCard.classList.add('hidden');
+    drop(K.ACTIVE);
+    const log = load(K.LOG, []);
+    log.push({
+      taskId: stop.taskId, taskTitle: stop.taskTitle, taskType: stop.taskType,
+      parentTitle: stop.parentTitle || null, parentId: stop.parentId || null,
+      date: todayKey(), startTime: stop.startTime, endTime: stop.startTime + stop.loggedMs,
+      duration: stop.loggedMs, actualDuration: stop.duration,
+      comment: stopComment.value.trim() || null,
+      syncedToAdo: false,
+    });
+    save(K.LOG, log);
+    newEntry.classList.remove('hidden');
+    renderLog();
+    const label = stop.taskId ? `#${stop.taskId}` : stop.taskTitle;
+    toast(`Logged ${fmtHM(stop.loggedMs)} — ${label}`, 'success');
+  }
+
+  function showActive(entry) {
+    activeId.textContent    = entry.taskId ? `#${entry.taskId}` : '—';
+    activeTitle.textContent = entry.taskTitle;
+    activeType.textContent  = entry.taskType || '';
+    if (entry.parentId) {
+      activeParent.innerHTML = `↳ <a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${entry.parentId}" target="_blank" rel="noopener" class="ado-link">#${entry.parentId}</a>${entry.parentTitle ? ' ' + esc(entry.parentTitle) : ''}`;
+      activeParent.classList.remove('hidden');
+    } else if (entry.parentTitle) {
+      activeParent.textContent = `↳ ${entry.parentTitle}`;
+      activeParent.classList.remove('hidden');
+    } else {
+      activeParent.classList.add('hidden');
+    }
+    startedAt.textContent   = `Started ${fmtTime(entry.startTime)}`;
+    activeNote.value = entry.note || '';
+    activeCard.classList.remove('hidden');
+    tick(entry.startTime);
+    clearInterval(timerIv);
+    timerIv = setInterval(() => tick(entry.startTime), 1000);
+  }
+
+  function tick(start) {
+    const active = load(K.ACTIVE, null);
+    const s = active ? active.startTime : start;
+    timerDisplay.textContent = fmt(Date.now() - s);
+  }
+
+  // ── Active card start-time edit ──────────────────────────
+  function startEditStartTime() {
+    const active = load(K.ACTIVE, null);
+    if (!active) return;
+    startedAt.classList.add('hidden');
+    startedEditBtn.classList.add('hidden');
+    startedTimeInput.value = tsToTimeInput(active.startTime);
+    startedTimeInput.classList.remove('hidden');
+    startedTimeInput.focus();
+  }
+
+  function commitEditStartTime() {
+    const active = load(K.ACTIVE, null);
+    if (!active) return;
+    const ts = timeInputToTs(startedTimeInput.value);
+    if (!ts) { cancelEditStartTime(); return; }
+    const minTs = getMinStartTs();
+    if (minTs && ts < minTs) {
+      toast('Start time overlaps a previous entry', 'error');
+      cancelEditStartTime();
+      return;
+    }
+    if (ts > Date.now()) {
+      toast('Start time cannot be in the future', 'error');
+      cancelEditStartTime();
+      return;
+    }
+    active.startTime = ts;
+    save(K.ACTIVE, active);
+    cancelEditStartTime();
+    showActive(active);
+  }
+
+  function cancelEditStartTime() {
+    startedTimeInput.classList.add('hidden');
+    startedAt.classList.remove('hidden');
+    startedEditBtn.classList.remove('hidden');
+  }
+
+  // ── Log ──────────────────────────────────────────────────
+  function buildGapRow(gapStart, gapEnd) {
+    const gapMs  = gapEnd - gapStart;
+    const gapMin = Math.round(gapMs / 60000);
+    const tr     = document.createElement('tr');
+    tr.className = 'gap-row';
+
+    let selectedTask = null;
+
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.innerHTML = `
+      <div class="gap-row-inner">
+        <div class="gap-row-controls">
+          <span class="gap-label">⚡ ${gapMin}m · ${fmtTime(gapStart)}–${fmtTime(gapEnd)}</span>
+          <div class="gap-form">
+            <div class="gap-search-wrap">
+              <input class="gap-input input" placeholder="Search task or type description…" autocomplete="off">
+              <div class="gap-dropdown hidden"></div>
+            </div>
+            <button class="btn btn-sm gap-save-btn">Add</button>
+            <button class="btn btn-sm btn-ghost gap-skip-btn">Skip</button>
+          </div>
+        </div>
+        <textarea class="gap-note" placeholder="Notes (optional)…"></textarea>
+      </div>
+    `;
+
+    const input    = td.querySelector('.gap-input');
+    const dropdown = td.querySelector('.gap-dropdown');
+    const noteArea = td.querySelector('.gap-note');
+    const saveBtn  = td.querySelector('.gap-save-btn');
+    const skipBtn  = td.querySelector('.gap-skip-btn');
+
+    function showDropdown(results) {
+      dropdown.innerHTML = '';
+      dropdown.classList.toggle('hidden', results.length === 0);
+      results.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'dropdown-item';
+        item.innerHTML = `<span class="di-id">#${esc(t.id)}</span><span class="di-title">${esc(t.title)}</span><span class="di-type">${esc(t.type)}</span>${t.parentTitle ? `<span class="di-parent">↳ ${esc(t.parentTitle)}</span>` : ''}`;
+        item.addEventListener('mousedown', ev => {
+          ev.preventDefault();
+          selectedTask = t;
+          input.value = `#${t.id} ${t.title}`;
+          dropdown.classList.add('hidden');
+        });
+        dropdown.appendChild(item);
+      });
+    }
+
+    input.addEventListener('input', () => {
+      selectedTask = null;
+      showDropdown(search(input.value.trim()));
+    });
+    input.addEventListener('blur', () => setTimeout(() => dropdown.classList.add('hidden'), 150));
+    input.addEventListener('focus', () => { if (input.value.trim()) showDropdown(search(input.value.trim())); });
+
+    saveBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (!text) { input.focus(); return; }
+      // Auto-resolve if user typed without clicking a dropdown result
+      if (!selectedTask) {
+        const hits = search(text);
+        if (hits.length === 1) selectedTask = hits[0];
+        else if (hits.length > 0 && String(hits[0].id) === text) selectedTask = hits[0];
+      }
+      const dateStr = new Date(gapStart).toISOString().split('T')[0];
+      const allLog  = load(K.LOG, []);
+      allLog.push({
+        taskId:       selectedTask ? selectedTask.id   : null,
+        taskTitle:    selectedTask ? selectedTask.title : text,
+        taskType:     selectedTask ? selectedTask.type  : 'Manual',
+        parentTitle:  selectedTask ? (selectedTask.parentTitle || null) : null,
+        parentId:     selectedTask ? (selectedTask.parentId    || null) : null,
+        date:         dateStr,
+        startTime:    gapStart,
+        endTime:      gapEnd,
+        duration:     gapEnd - gapStart,
+        actualDuration: gapEnd - gapStart,
+        comment:      noteArea.value.trim() || null,
+        syncedToAdo:  false,
+      });
+      save(K.LOG, allLog);
+      renderLog();
+    });
+
+    skipBtn.addEventListener('click', () => tr.remove());
+
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function buildDayTable(dayEntries, withGaps) {
+    const tbl = document.createElement('table');
+    tbl.className = 'log-table';
+    tbl.innerHTML = '<thead><tr><th>Task</th><th style="width:40%">Title</th><th>Window</th><th>Time</th><th></th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    const gapThreshMs = load(K.GAP_THRESHOLD, 15) * 60 * 1000;
+
+    for (let i = 0; i < dayEntries.length; i++) {
+      const e = dayEntries[i];
+      const tr = document.createElement('tr');
+      tr.dataset.idx = e._idx;
+      tr.innerHTML = `
+        <td class="td-id">
+          ${e.taskId ? `<a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${e.taskId}" target="_blank" rel="noopener" class="ado-link">#${esc(e.taskId)}</a>` : '<span style="color:var(--text-muted)">—</span>'}
+          ${e.parentId ? `<div><a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${e.parentId}" target="_blank" rel="noopener" class="ado-link parent-link" title="${esc(e.parentTitle || 'User Story')}">#${esc(e.parentId)}</a></div>` : ''}
+          ${e.syncedToAdo ? '<span class="synced-dot" title="Published to ADO"></span>' : ''}
+        </td>
+        <td class="td-title" title="${esc(e.taskTitle)}">${esc(e.taskTitle)}${e.comment ? `<div class="td-comment" title="${esc(e.comment)}">${esc(e.comment)}</div>` : ''}</td>
+        <td class="td-range">${fmtTime(e.startTime)}&ndash;${fmtTime(e.endTime)}</td>
+        <td class="td-dur">${fmtHM(e.duration)}</td>
+        <td class="td-del">
+          <button class="continue-btn" data-idx="${e._idx}" aria-label="Continue entry" title="Continue this task">▶</button>
+          <button class="edit-entry-btn" data-idx="${e._idx}" aria-label="Edit entry" title="Edit">✎</button>
+          <button class="delete-btn" data-idx="${e._idx}" aria-label="Delete entry" title="Delete">✕</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+      const editTr = document.createElement('tr');
+      editTr.className = 'entry-edit-row hidden';
+      editTr.dataset.editIdx = e._idx;
+      editTr.innerHTML = `
+        <td colspan="5">
+          <div class="entry-edit-fields">
+            <label>Start <input type="time" class="edit-start" data-idx="${e._idx}" value="${tsToTimeInput(e.startTime)}"></label>
+            <label>End <input type="time" class="edit-end" data-idx="${e._idx}" value="${tsToTimeInput(e.endTime)}"></label>
+            <label class="edit-synced-label"><input type="checkbox" class="edit-synced" data-idx="${e._idx}" ${e.syncedToAdo ? 'checked' : ''}> Mark as published</label>
+            <span class="entry-edit-err hidden"></span>
+            <div class="entry-edit-actions">
+              <button class="btn btn-sm edit-save" data-idx="${e._idx}">Save</button>
+              <button class="btn btn-sm btn-ghost edit-cancel" data-idx="${e._idx}">Cancel</button>
+            </div>
+          </div>
+          <div class="comment-input-wrap">
+            <textarea class="edit-comment" data-idx="${e._idx}" placeholder="Notes (optional)…">${esc(e.comment || '')}</textarea>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(editTr);
+
+      // insert gap row between this entry and the next when gap exceeds threshold
+      if (withGaps && i < dayEntries.length - 1) {
+        const next = dayEntries[i + 1];
+        const gap  = next.startTime - e.endTime;
+        if (gap > gapThreshMs) tbody.appendChild(buildGapRow(e.endTime, next.startTime));
+      }
+    }
+    tbl.appendChild(tbody);
+    return tbl;
+  }
+
+  function toggleDay(key) {
+    if (expandedDays.has(key)) expandedDays.delete(key);
+    else expandedDays.add(key);
+    renderLog();
+  }
+
+  function renderLog() {
+    const ws      = load(K.WEEK_START, 0);
+    const dates   = getWeekDates(weekOffset, ws);
+    const todayK  = todayKey();
+
+    weekLabel.textContent = fmtWeekLabel(dates);
+    weekNext.disabled = weekOffset >= 0;
+
+    const allLog    = load(K.LOG, []);
+    const weekKeys  = new Set(dates.map(d => dateKey(d)));
+    const weekEntries = allLog.filter(e => weekKeys.has(e.date));
+    const weekTotal = weekEntries.reduce((s, e) => s + e.duration, 0);
+    weekTotalEl.textContent = weekTotal > 0 ? fmtHM(weekTotal) : '—';
+
+    logBody.innerHTML = '';
+
+    for (const date of dates) {
+      const key      = dateKey(date);
+      const isToday  = key === todayK;
+      const isFuture = key > todayK;
+      if (isFuture) continue;
+
+      const dayEntries = allLog
+        .map((e, i) => ({ ...e, _idx: i }))
+        .filter(e => e.date === key)
+        .sort((a, b) => a.startTime - b.startTime);
+      const hasEntries = dayEntries.length > 0;
+      const dayTotal   = dayEntries.reduce((s, e) => s + e.duration, 0);
+      const isExpanded = expandedDays.has(key);
+
+      const section = document.createElement('div');
+      section.className = 'day-section';
+
+      const hdr = document.createElement('div');
+      hdr.className = `day-header${hasEntries ? '' : ' no-entries'}`;
+      hdr.innerHTML = `
+        <span class="day-toggle${hasEntries ? (isExpanded ? ' expanded' : '') : ' invisible'}">▶</span>
+        <span class="day-name${isToday ? ' today' : ''}">${fmtDayHeader(date)}</span>
+        ${isToday ? '<span class="today-badge">Today</span>' : ''}
+        <span class="day-total${hasEntries ? ' has-entries' : ''}">${hasEntries ? fmtHM(dayTotal) : '—'}</span>
+        ${hasEntries ? '<button class="btn btn-ghost btn-sm day-summary-btn">Summary</button>' : ''}
+        ${hasEntries && dayEntries.some(e => !e.syncedToAdo) ? '<button class="btn btn-ghost btn-sm day-summary-btn" style="color:var(--accent);border-color:var(--accent)" data-publish>Publish</button>' : ''}
+        ${isToday && hasEntries ? `<button class="btn btn-ghost btn-sm gap-find-btn" data-gaps style="${gapsVisible ? 'opacity:1;color:var(--accent);border-color:var(--accent)' : ''}">${gapsVisible ? 'Hide Gaps' : 'Find Gaps'}</button>` : ''}
+      `;
+      if (hasEntries) hdr.addEventListener('click', e => {
+        if (e.target.closest('[data-publish]')) { openPublish(key); return; }
+        if (e.target.closest('[data-gaps]')) { gapsVisible = !gapsVisible; renderLog(); return; }
+        if (e.target.closest('.day-summary-btn')) { openDaySummary(key, dayEntries); return; }
+        toggleDay(key);
+      });
+
+      const entriesDiv = document.createElement('div');
+      entriesDiv.className = `day-entries${isExpanded ? '' : ' collapsed'}`;
+      if (hasEntries) entriesDiv.appendChild(buildDayTable(dayEntries, isToday && gapsVisible));
+
+      section.appendChild(hdr);
+      section.appendChild(entriesDiv);
+      logBody.appendChild(section);
+    }
+
+    if (!logBody.children.length) {
+      logBody.innerHTML = '<div class="log-empty">No entries this week.</div>';
+    }
+    logActions.classList.toggle('hidden', weekEntries.length === 0);
+  }
+
+  function deleteEntry(idx) {
+    const log = load(K.LOG, []);
+    log.splice(idx, 1);
+    save(K.LOG, log);
+    renderLog();
+    toast('Entry removed.', 'info');
+  }
+
+  function editEntry(idx) {
+    document.querySelectorAll('.entry-edit-row').forEach(r => {
+      if (Number(r.dataset.editIdx) !== idx) r.classList.add('hidden');
+    });
+    const editRow = document.querySelector(`.entry-edit-row[data-edit-idx="${idx}"]`);
+    if (!editRow) return;
+    const isOpen = !editRow.classList.contains('hidden');
+    editRow.classList.toggle('hidden', isOpen);
+    if (!isOpen) editRow.querySelector('.edit-start').focus();
+  }
+
+  function commitEditEntry(idx) {
+    const log = load(K.LOG, []);
+    const entry = log[idx];
+    if (!entry) return;
+
+    const editRow = document.querySelector(`.entry-edit-row[data-edit-idx="${idx}"]`);
+    const startInput = editRow.querySelector('.edit-start');
+    const endInput   = editRow.querySelector('.edit-end');
+    const errEl      = editRow.querySelector('.entry-edit-err');
+
+    const showErr = msg => { errEl.textContent = msg; errEl.classList.remove('hidden'); };
+    errEl.classList.add('hidden');
+
+    const newStart = timeInputToTs(startInput.value);
+    const newEnd   = timeInputToTs(endInput.value);
+    if (!newStart || !newEnd) { showErr('Invalid time'); return; }
+    if (newEnd <= newStart)   { showErr('End must be after start'); return; }
+
+    // check against adjacent entries (same day)
+    const today = entry.date;
+    const siblings = log
+      .map((e, i) => ({ ...e, _idx: i }))
+      .filter(e => e.date === today && e._idx !== idx)
+      .sort((a, b) => a.startTime - b.startTime);
+
+    // Normalize to minute boundaries so that editing a time input (which loses seconds)
+    // doesn't falsely flag adjacent entries that share an exact minute boundary.
+    const toMin = ts => Math.floor(ts / 60000) * 60000;
+    for (const s of siblings) {
+      if (toMin(newStart) < toMin(s.endTime) && toMin(newEnd) > toMin(s.startTime)) {
+        showErr(`Overlaps "${s.taskTitle}" (${fmtTime(s.startTime)}–${fmtTime(s.endTime)})`);
+        return;
+      }
+    }
+
+    entry.startTime = newStart;
+    entry.endTime   = newEnd;
+    entry.duration  = newEnd - newStart;
+    entry.actualDuration = newEnd - newStart;
+    const commentEl = editRow.querySelector('.edit-comment');
+    entry.comment = commentEl ? (commentEl.value.trim() || null) : (entry.comment || null);
+    const syncedEl = editRow.querySelector('.edit-synced');
+    if (syncedEl) entry.syncedToAdo = syncedEl.checked;
+    save(K.LOG, log);
+    renderLog();
+    toast('Entry updated.', 'success');
+  }
+
+  function cancelEditEntry(idx) {
+    const editRow = document.querySelector(`.entry-edit-row[data-edit-idx="${idx}"]`);
+    if (editRow) editRow.classList.add('hidden');
+  }
+
+  // ── Daily Summary Modal ──────────────────────────────────
+  function openDaySummary(dateKey, entries) {
+    const grouped = {};
+    for (const e of entries) {
+      const key = e.taskId != null ? String(e.taskId) : '__m__' + e.taskTitle;
+      if (!grouped[key]) {
+        grouped[key] = { taskId: e.taskId, taskTitle: e.taskTitle, taskType: e.taskType,
+                         parentId: e.parentId || null, parentTitle: e.parentTitle || null,
+                         totalMs: 0, comments: [] };
+      }
+      grouped[key].totalMs += e.duration;
+      if (e.comment) grouped[key].comments.push(e.comment);
+    }
+
+    const rows = Object.values(grouped);
+    let grandTotal = 0;
+
+    const tbl = $('day-summary-table');
+    tbl.innerHTML = `
+      <thead><tr>
+        <th>Task</th><th>US</th><th style="width:40%">Title</th><th style="text-align:right">Hours</th><th>Notes</th>
+      </tr></thead>
+    `;
+    const tbody = document.createElement('tbody');
+    for (const g of rows) {
+      const rounded  = roundToNearest30(g.totalMs);
+      grandTotal    += rounded;
+      const adoStr   = (rounded / 3600000).toFixed(2);
+      const taskLink = g.taskId
+        ? `<a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${g.taskId}" target="_blank" rel="noopener" class="ado-link">#${esc(g.taskId)}</a>`
+        : '<span style="color:var(--text-muted)">—</span>';
+      const usLink = g.parentId
+        ? `<a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${g.parentId}" target="_blank" rel="noopener" class="ado-link parent-link" title="${esc(g.parentTitle || '')}">#${esc(g.parentId)}</a>`
+        : '';
+      const notes = g.comments.join(' | ');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="td-id" style="white-space:nowrap">${taskLink}</td>
+        <td class="td-id" style="white-space:nowrap">${usLink}</td>
+        <td>${esc(g.taskTitle)}</td>
+        <td class="td-ado">${adoStr}</td>
+        <td style="font-size:0.75rem;color:var(--text-muted)">${esc(notes)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);
+
+    $('day-summary-title').textContent = `Summary — ${dateKey}`;
+    $('day-summary-total').innerHTML = `Total: <strong>${(grandTotal / 3600000).toFixed(2)} h</strong>`;
+    $('day-summary-modal').classList.remove('hidden');
+  }
+
+  function closeDaySummary() { $('day-summary-modal').classList.add('hidden'); }
+
+  // ── CSV export (current week, grouped by task) ──────────
+  function exportCSV() {
+    const ws      = load(K.WEEK_START, 0);
+    const dates   = getWeekDates(weekOffset, ws);
+    const weekKeys = new Set(dates.map(d => dateKey(d)));
+    const entries  = load(K.LOG, []).filter(e => weekKeys.has(e.date));
+    if (!entries.length) { toast('No entries for this week.', 'info'); return; }
+
+    const grouped = {};
+    for (const e of entries) {
+      const key = e.date + '|' + (e.taskId != null ? String(e.taskId) : '__m__' + e.taskTitle);
+      if (!grouped[key]) {
+        grouped[key] = { date: e.date, taskId: e.taskId, taskTitle: e.taskTitle, taskType: e.taskType, parentId: e.parentId || null, totalMs: 0, comments: [] };
+      }
+      grouped[key].totalMs += e.duration;
+      if (e.comment) grouped[key].comments.push(e.comment);
+    }
+
+    const rows = [['Date', 'Task ID', 'User Story', 'Title', 'Type', 'Total (min)', 'Total (h)', 'ADO (h)', 'Notes']];
+    for (const g of Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date))) {
+      const totalMin = Math.round(g.totalMs / 60000);
+      const canSync  = !!g.taskId && !NO_SCHEDULING_TYPES.has(g.taskType);
+      const adoHours = canSync ? (roundToNearest30(g.totalMs) / 3600000).toFixed(2) : '';
+      const notes    = g.comments.length ? `"${g.comments.join(' | ').replace(/"/g, '""')}"` : '';
+      rows.push([
+        g.date,
+        g.taskId ?? '',
+        g.parentId ?? '',
+        `"${g.taskTitle.replace(/"/g, '""')}"`,
+        g.taskType,
+        totalMin,
+        (totalMin / 60).toFixed(2),
+        adoHours,
+        notes,
+      ]);
+    }
+
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a   = document.createElement('a');
+    a.href = url; a.download = `punch-week-${dateKey(dates[0])}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    toast('Week CSV downloaded.', 'success');
+  }
+
+  // ── Publish ──────────────────────────────────────────────
+  let publishDateKey = null;
+
+  function openPublish(dateK) {
+    publishDateKey = dateK || todayKey();
+    const allLog = load(K.LOG, []);
+    const dayEntries = allLog
+      .map((e, i) => ({ ...e, _idx: i }))
+      .filter(e => e.date === publishDateKey && !e.syncedToAdo);
+
+    if (!dayEntries.length) {
+      toast('No unsynced entries for this day.', 'info');
+      return;
+    }
+
+    const groups = {};
+    for (const e of dayEntries) {
+      const key = e.taskId != null ? String(e.taskId) : '__m__' + e.taskTitle;
+      if (!groups[key]) {
+        groups[key] = {
+          taskId: e.taskId, taskTitle: e.taskTitle, taskType: e.taskType,
+          entries: [], totalActual: 0,
+          canSync: !!e.taskId && !NO_SCHEDULING_TYPES.has(e.taskType),
+        };
+      }
+      groups[key].entries.push(e);
+      groups[key].totalActual += e.duration;
+    }
+
+    publishItems = Object.values(groups).map(g => ({
+      ...g, publishMs: roundToNearest30(g.totalActual),
+    }));
+
+    const d = new Date(publishDateKey + 'T12:00:00');
+    publishDate.textContent = d.toLocaleDateString([], {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+    });
+    publishDo.textContent = 'Publish to ADO';
+    publishDo.disabled = false;
+    publishCancel.textContent = 'Cancel';
+    renderPublishTable();
+    publishModal.classList.remove('hidden');
+  }
+
+  function closePublish() {
+    publishModal.classList.add('hidden');
+    publishItems = [];
+  }
+
+  function renderPublishTable() {
+    publishBody.innerHTML = '';
+    const hasPat = !!getPat();
+
+    const table = document.createElement('table');
+    table.className = 'publish-table';
+    table.innerHTML = '<thead><tr><th>Task</th><th style="width:36%">Title</th><th>Actual</th><th>Will Log</th></tr></thead>';
+
+    const tbody = document.createElement('tbody');
+    publishItems.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      const canAdjust = item.canSync && hasPat;
+      tr.innerHTML = `
+        <td class="td-id">${item.taskId ? `#${esc(item.taskId)}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td class="td-title" title="${esc(item.taskTitle)}">${esc(item.taskTitle)}</td>
+        <td class="td-range">${fmtHM(item.totalActual)}</td>
+        <td>${canAdjust ? `
+          <div class="pub-stepper">
+            <button class="stepper-btn pub-down" data-pidx="${idx}" aria-label="− step" ${item.publishMs <= getRoundMs() ? 'disabled' : ''}>−</button>
+            <span class="pub-stepper-val" data-pidxval="${idx}">${fmtHM(item.publishMs)}</span>
+            <button class="stepper-btn pub-up" data-pidx="${idx}" aria-label="+30 min">+</button>
+          </div>
+        ` : `<span class="pub-local">${fmtHM(item.totalActual)}<br><span style="font-size:0.6rem;opacity:0.6">${!item.taskId ? 'local' : 'no sched.'}</span></span>`}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    publishBody.appendChild(table);
+
+    const adoTotal = publishItems.filter(i => i.canSync).reduce((s, i) => s + i.publishMs, 0);
+    if (adoTotal > 0) {
+      const actualTotal = publishItems.reduce((s, i) => s + i.totalActual, 0);
+      const totals = document.createElement('div');
+      totals.className = 'publish-totals';
+      totals.innerHTML = `<span class="publish-totals-label">Actual: ${fmtHM(actualTotal)}</span><span class="publish-totals-val">ADO total: ${fmtHM(adoTotal)}</span>`;
+      publishBody.appendChild(totals);
+    }
+
+    if (!hasPat) {
+      const warn = document.createElement('div');
+      warn.style.cssText = 'font-size:0.75rem;color:var(--text-muted);padding:0.5rem 0;border-top:1px solid var(--border);margin-top:0.25rem';
+      warn.textContent = 'No PAT configured — entries will be marked as published locally only.';
+      publishBody.appendChild(warn);
+      publishDo.textContent = 'Mark as Published';
+    }
+  }
+
+  function adjustPublishItem(idx, delta) {
+    const item = publishItems[idx];
+    if (!item) return;
+    const next = item.publishMs + delta;
+    if (next < getRoundMs()) return;
+    item.publishMs = next;
+    renderPublishTable();
+  }
+
+  async function doPublish() {
+    const pat = getPat();
+    publishDo.disabled = true;
+    publishDo.textContent = 'Publishing…';
+
+    const results = [];
+    for (const item of publishItems) {
+      if (!item.canSync || !pat) {
+        results.push({ item, status: 'local' });
+        continue;
+      }
+      try {
+        const sched = await fetchScheduling(item.taskId, pat);
+        const addedHours = item.publishMs / 3600000;
+        const newCompleted = Math.round((sched.completed + addedHours) * 100) / 100;
+        let newRemaining = null;
+        if (sched.original != null && sched.original > 0) {
+          newRemaining = Math.round(Math.max(0, sched.original - newCompleted) * 100) / 100;
+        } else if (sched.remaining != null) {
+          newRemaining = Math.round(Math.max(0, sched.remaining - addedHours) * 100) / 100;
+        }
+        await patchScheduling(item.taskId, newCompleted, newRemaining, pat);
+        results.push({ item, status: 'ok', hours: item.publishMs });
+      } catch (err) {
+        results.push({ item, status: 'err', error: err.message });
+      }
+    }
+
+    // Mark ADO-synced entries; mark all remaining day entries (manual/local) as synced too
+    const allLog = load(K.LOG, []);
+    for (const r of results) {
+      if (r.status === 'ok' || r.status === 'local') {
+        for (const e of r.item.entries) {
+          allLog[e._idx].syncedToAdo = (r.status === 'ok');
+        }
+      }
+    }
+    // Mark any remaining unsynced entries for the day (e.g. manual entries) as settled
+    allLog.forEach((e, i) => {
+      if (e.date === publishDateKey && !e.syncedToAdo) allLog[i].syncedToAdo = true;
+    });
+    save(K.LOG, allLog);
+    renderLog();
+
+    showPublishResults(results);
+  }
+
+  function showPublishResults(results) {
+    publishBody.innerHTML = '';
+    const ok  = results.filter(r => r.status === 'ok').length;
+    const err = results.filter(r => r.status === 'err').length;
+
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-size:0.8rem;color:var(--text-muted);margin-bottom:0.6rem';
+    heading.textContent = err === 0
+      ? `Published ${ok} task${ok !== 1 ? 's' : ''} to ADO.`
+      : `${ok} synced, ${err} failed.`;
+    publishBody.appendChild(heading);
+
+    const list = document.createElement('div');
+    for (const r of results) {
+      const row = document.createElement('div');
+      row.className = 'publish-result-row';
+      const ms = r.status === 'ok' ? r.hours : r.item.totalActual;
+      const statusText = r.status === 'ok' ? '✓ synced'
+        : r.status === 'local' ? 'local only'
+        : `✗ ${r.error ? r.error.slice(0, 40) : 'failed'}`;
+      const statusClass = r.status === 'ok' ? 'ok' : r.status === 'local' ? 'local' : 'err';
+      row.innerHTML = `
+        <span class="pr-task">${r.item.taskId ? `#${esc(r.item.taskId)}` : '—'}</span>
+        <span class="pr-title" title="${esc(r.item.taskTitle)}">${esc(r.item.taskTitle)}</span>
+        <span class="pr-hours">${fmtHM(ms)}</span>
+        <span class="pr-status ${statusClass}">${statusText}</span>
+      `;
+      list.appendChild(row);
+    }
+    publishBody.appendChild(list);
+
+    // Day summary
+    const summary = generateDaySummary(results);
+    const wrap = document.createElement('div');
+    wrap.style.marginTop = '0.75rem';
+    wrap.innerHTML = `
+      <div style="font-family:var(--mono);font-size:0.58rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Day Summary</div>
+      <div class="publish-summary-box" id="day-summary-text">${esc(summary)}</div>
+      <div style="text-align:right;margin-top:0.3rem">
+        <button class="btn btn-ghost" id="copy-summary-btn" style="font-size:0.72rem;padding:0.35rem 0.85rem;">Copy</button>
+      </div>
+    `;
+    publishBody.appendChild(wrap);
+    document.getElementById('copy-summary-btn').addEventListener('click', () => {
+      navigator.clipboard.writeText(summary).then(
+        () => toast('Summary copied.', 'success'),
+        () => toast('Copy failed — select text manually.', 'error')
+      );
+    });
+
+    publishDo.textContent = 'Publish Again';
+    publishDo.disabled = false;
+    publishCancel.textContent = 'Done';
+  }
+
+  function generateDaySummary(results) {
+    const dateStr = new Date().toLocaleDateString([], {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+    });
+    const lines = [`Time log — ${dateStr}`, ''];
+    let totalMs = 0;
+    for (const r of results) {
+      const ms = r.status === 'ok' ? r.hours : r.item.totalActual;
+      totalMs += ms;
+      const tag   = r.item.taskId ? `#${r.item.taskId}` : '—';
+      const title = r.item.taskTitle.length > 32 ? r.item.taskTitle.slice(0, 29) + '…' : r.item.taskTitle;
+      lines.push(`${tag.padEnd(8)} ${title.padEnd(33)} ${fmtHM(ms)}`);
+    }
+    lines.push('');
+    lines.push(`${''.padEnd(8)} ${'Total'.padEnd(33)} ${fmtHM(totalMs)}`);
+    return lines.join('\n');
+  }
+
+  // ── Notifications ────────────────────────────────────────
+  function setupNotifyTimer() {
+    clearInterval(notifyIv);
+    const interval = load(K.NOTIFY_INTERVAL, 0);
+    if (!interval) return;
+    notifyIv = setInterval(checkNotification, 60_000);
+  }
+
+  function checkNotification() {
+    if (Notification.permission !== 'granted') return;
+    const interval = load(K.NOTIFY_INTERVAL, 0);
+    if (!interval) return;
+    const workStart = load(K.WORK_START, '');
+    const workEnd   = load(K.WORK_END,   '');
+    if (workStart && workEnd) {
+      const now = new Date();
+      const [sh, sm] = workStart.split(':').map(Number);
+      const [eh, em] = workEnd.split(':').map(Number);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const startMin = sh * 60 + sm;
+      const endMin   = eh * 60 + em;
+      if (nowMin < startMin || nowMin > endMin) return;
+    }
+    const active = load(K.ACTIVE, null);
+    if (active) return;
+    const now = Date.now();
+    if (now - lastNotifiedAt < interval * 60_000) return;
+    lastNotifiedAt = now;
+    new Notification('Punch', { body: "You're not tracking time right now.", icon: '' });
+  }
+
+  // ── Settings ─────────────────────────────────────────────
+  function openSettings() {
+    patInput.value = getPat() || '';
+    rememberPat.checked = !!getPat();
+    weekStartSelect.value = String(load(K.WEEK_START, 0));
+    roundSelect.value         = String(load(K.ROUND_INCREMENT, 30));
+    gapThresholdSelect.value  = String(load(K.GAP_THRESHOLD, 15));
+    workStartInput.value = load(K.WORK_START, '');
+    workEndInput.value   = load(K.WORK_END,   '');
+    notifySelect.value   = String(load(K.NOTIFY_INTERVAL, 0));
+    if (Notification.permission === 'denied') {
+      notifyWarn.classList.remove('hidden');
+    } else {
+      notifyWarn.classList.add('hidden');
+    }
+    const perm = Notification.permission;
+    notifyStatus.textContent = `Notification permission: ${perm}`;
+    notifyStatus.classList.remove('hidden');
+    settingsModal.classList.remove('hidden');
+    setTimeout(() => patInput.focus(), 50);
+  }
+  function closeSettings() { settingsModal.classList.add('hidden'); }
+  async function saveSettings() {
+    const pat = patInput.value.trim();
+    save(K.WEEK_START, Number(weekStartSelect.value));
+    save(K.ROUND_INCREMENT, Number(roundSelect.value));
+    save(K.GAP_THRESHOLD, Number(gapThresholdSelect.value));
+    save(K.WORK_START, workStartInput.value);
+    save(K.WORK_END,   workEndInput.value);
+    const newInterval = Number(notifySelect.value);
+    save(K.NOTIFY_INTERVAL, newInterval);
+    if (pat) {
+      if (rememberPat.checked) save(K.PAT, pat);
+      else drop(K.PAT);
+    }
+    if (newInterval && Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+    setupNotifyTimer();
+    closeSettings();
+    renderLog();
+    if (pat) await loadTasks(true);
+  }
+
+  // ── Events ───────────────────────────────────────────────
+  settingsBtn.addEventListener('click', openSettings);
+  configureBtn.addEventListener('click', openSettings);
+  settingsSave.addEventListener('click', saveSettings);
+  settingsCancel.addEventListener('click', closeSettings);
+  notifyTestBtn.addEventListener('click', async () => {
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission === 'granted') {
+      new Notification('Punch', { body: 'Test — notifications are working.' });
+      notifyStatus.textContent = 'Notification permission: granted ✓';
+    } else {
+      notifyStatus.textContent = `Notification permission: ${Notification.permission} — check browser site settings`;
+    }
+  });
+  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettings(); });
+  patInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveSettings(); if (e.key === 'Escape') closeSettings(); });
+
+  refreshBtn.addEventListener('click', () => loadTasks(true));
+  weekPrev.addEventListener('click', () => { weekOffset--; renderLog(); });
+  weekNext.addEventListener('click', () => { if (weekOffset < 0) { weekOffset++; renderLog(); } });
+
+  taskSearch.addEventListener('input', () => {
+    drillStory = null;
+    const q = taskSearch.value.trim();
+    if (!q) { hideDropdown(); return; }
+    renderDropdown(search(q), q);
+  });
+  taskSearch.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown')  { e.preventDefault(); moveFocus(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      selectDropdownItem(currentResults[focusedIdx]);
+    }
+    else if (e.key === 'Escape') hideDropdown();
+  });
+  taskSearch.addEventListener('blur', () => setTimeout(hideDropdown, 160));
+
+  chipClear.addEventListener('click', clearPick);
+  startBtn.addEventListener('click', startTimer);
+  stopBtn.addEventListener('click', stopTimer);
+  function continueEntry(idx) {
+    if (load(K.ACTIVE, null)) { toast('Stop the current timer first', 'error'); return; }
+    const entry = load(K.LOG, [])[idx];
+    if (!entry) return;
+    const active = {
+      taskId:      entry.taskId,
+      taskTitle:   entry.taskTitle,
+      taskType:    entry.taskType,
+      parentTitle: entry.parentTitle || null,
+      parentId:    entry.parentId   || null,
+      startTime:   Date.now(),
+    };
+    save(K.ACTIVE, active);
+    showActive(active);
+    clearPick();
+    newEntry.classList.add('hidden');
+    // Switch to Timer tab so the active card is visible
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('.tab-btn[data-tab="timer"]').classList.add('active');
+    $('tab-timer').classList.add('active');
+  }
+
+  logBody.addEventListener('click', e => {
+    const cont = e.target.closest('.continue-btn');
+    const del  = e.target.closest('.delete-btn');
+    const edit = e.target.closest('.edit-entry-btn');
+    const save = e.target.closest('.edit-save');
+    const canc = e.target.closest('.edit-cancel');
+    if (cont) continueEntry(Number(cont.dataset.idx));
+    if (del)  deleteEntry(Number(del.dataset.idx));
+    if (edit) editEntry(Number(edit.dataset.idx));
+    if (save) commitEditEntry(Number(save.dataset.idx));
+    if (canc) cancelEditEntry(Number(canc.dataset.idx));
+  });
+  cancelStopBtn.addEventListener('click', cancelStop);
+
+  activeNote.addEventListener('input', () => {
+    const active = load(K.ACTIVE, null);
+    if (!active) return;
+    active.note = activeNote.value.trim() || null;
+    save(K.ACTIVE, active);
+  });
+
+  startedEditBtn.addEventListener('click', startEditStartTime);
+  startedTimeInput.addEventListener('change', commitEditStartTime);
+  startedTimeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') commitEditStartTime();
+    if (e.key === 'Escape') cancelEditStartTime();
+  });
+
+  startTimeInput.addEventListener('change', () => {
+    const ts = timeInputToTs(startTimeInput.value);
+    startTimeErr.classList.add('hidden');
+    if (!ts) { startOverride = null; return; }
+    const minTs = getMinStartTs();
+    if (minTs && ts < minTs) {
+      startTimeErr.textContent = 'Overlaps previous entry';
+      startTimeErr.classList.remove('hidden');
+      startOverride = null;
+      return;
+    }
+    if (ts > Date.now()) {
+      startTimeErr.textContent = 'Cannot be in the future';
+      startTimeErr.classList.remove('hidden');
+      startOverride = null;
+      return;
+    }
+    startOverride = ts;
+  });
+  stepperDown.addEventListener('click', () => adjustLoggedTime(-1));
+  stepperUp.addEventListener('click',   () => adjustLoggedTime(+1));
+  stepperValue.addEventListener('input', onStepperInput);
+  stepperValue.addEventListener('keydown', e => { if (e.key === 'Enter') saveEntryBtn.click(); });
+  saveEntryBtn.addEventListener('click', commitEntry);
+  exportBtn.addEventListener('click', exportCSV);
+
+  $('day-summary-close').addEventListener('click', closeDaySummary);
+  $('day-summary-modal').addEventListener('click', e => { if (e.target === $('day-summary-modal')) closeDaySummary(); });
+  $('day-summary-copy').addEventListener('click', () => {
+    const rows = [...$('day-summary-table').querySelectorAll('tbody tr')];
+    const lines = rows.map(tr => {
+      const cells = [...tr.querySelectorAll('td')];
+      const task  = cells[0].textContent.trim();
+      const us    = cells[1].textContent.trim();
+      const title = cells[2].textContent.trim();
+      const ado   = cells[3].textContent.trim();
+      const notes = cells[4].textContent.trim();
+      return [task, us, title, ado, notes].filter(Boolean).join('\t');
+    });
+    navigator.clipboard.writeText(lines.join('\n')).then(() => toast('Copied to clipboard.', 'success'));
+  });
+
+  $('publish-btn').addEventListener('click', () => openPublish(todayKey()));
+  publishCancel.addEventListener('click', closePublish);
+  publishModal.addEventListener('click', e => { if (e.target === publishModal) closePublish(); });
+  publishDo.addEventListener('click', () => {
+    if (publishDo.textContent === 'Publish Again') { openPublish(); return; }
+    doPublish();
+  });
+  publishBody.addEventListener('click', e => {
+    const down = e.target.closest('.pub-down');
+    const up   = e.target.closest('.pub-up');
+    if (down) adjustPublishItem(Number(down.dataset.pidx), -getRoundMs());
+    if (up)   adjustPublishItem(Number(up.dataset.pidx),   +getRoundMs());
+  });
+
+  // ── Tabs ─────────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      $('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Retro ────────────────────────────────────────────────
+  const RETRO_BUCKETS = [
+    { key: 'well',     inputId: 'retro-well-input',     listId: 'retro-well-list' },
+    { key: 'improve',  inputId: 'retro-improve-input',  listId: 'retro-improve-list' },
+    { key: 'action',   inputId: 'retro-action-input',   listId: 'retro-action-list' },
+    { key: 'shoutout', inputId: 'retro-shoutout-input', listId: 'retro-shoutout-list' },
+  ];
+
+  function renderRetro() {
+    const items = load(K.RETRO, []);
+    for (const b of RETRO_BUCKETS) {
+      const list = $(b.listId);
+      const bucketItems = items.filter(i => i.bucket === b.key);
+      list.innerHTML = '';
+      if (!bucketItems.length) {
+        list.innerHTML = '<li class="retro-empty">No items yet.</li>';
+        continue;
+      }
+      for (const item of bucketItems) {
+        const li = document.createElement('li');
+        li.className = 'retro-item';
+        li.innerHTML = `<span class="retro-item-text">${esc(item.text)}</span><button class="retro-del" data-retro-id="${item.id}" aria-label="Delete">✕</button>`;
+        list.appendChild(li);
+      }
+    }
+  }
+
+  function addRetroItem(bucket) {
+    const b = RETRO_BUCKETS.find(x => x.key === bucket);
+    if (!b) return;
+    const input = $(b.inputId);
+    const text = input.value.trim();
+    if (!text) return;
+    const items = load(K.RETRO, []);
+    items.push({ id: Date.now() + Math.random(), bucket, text });
+    save(K.RETRO, items);
+    input.value = '';
+    renderRetro();
+  }
+
+  function deleteRetroItem(id) {
+    const items = load(K.RETRO, []).filter(i => String(i.id) !== String(id));
+    save(K.RETRO, items);
+    renderRetro();
+  }
+
+  function clearRetro() {
+    if (!confirm('Clear all retro items?')) return;
+    save(K.RETRO, []);
+    renderRetro();
+  }
+
+  // Retro events
+  for (const b of RETRO_BUCKETS) {
+    const input = $(b.inputId);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') addRetroItem(b.key); });
+  }
+  document.querySelectorAll('[data-retro-add]').forEach(btn => {
+    btn.addEventListener('click', () => addRetroItem(btn.dataset.retroAdd));
+  });
+  $('tab-retro').addEventListener('click', e => {
+    const del = e.target.closest('.retro-del');
+    if (del) deleteRetroItem(del.dataset.retroId);
+  });
+  $('retro-clear-btn').addEventListener('click', clearRetro);
+
+  // ── TODO ─────────────────────────────────────────────────
+  const todoSearchEl   = $('todo-search');
+  const todoDropdownEl = $('todo-dropdown');
+  const todoChip       = $('todo-chip');
+  const todoChipId     = $('todo-chip-id');
+  const todoChipTitle  = $('todo-chip-title');
+  const todoChipClear  = $('todo-chip-clear');
+  const todoList       = $('todo-list');
+
+  let todoSelectedTask  = null;
+  let todoFocusedIdx    = -1;
+  let todoResults       = [];
+
+  function renderTodoDropdown(results) {
+    todoDropdownEl.innerHTML = '';
+    todoFocusedIdx = -1;
+    todoResults = results;
+    if (!results.length) { todoDropdownEl.classList.add('hidden'); return; }
+    for (const t of results) {
+      const el = document.createElement('div');
+      el.className = 'dropdown-item';
+      el.innerHTML = `
+        <span class="di-id">#${esc(t.id)}</span>
+        <span class="di-title">${esc(t.title)}</span>
+        <span class="di-type">${esc(t.type)}</span>
+        ${t.parentTitle ? `<span class="di-parent">↳ ${esc(t.parentTitle)}</span>` : ''}
+      `;
+      el.addEventListener('mousedown', e => { e.preventDefault(); pickTodoTask(t); });
+      todoDropdownEl.appendChild(el);
+    }
+    todoDropdownEl.classList.remove('hidden');
+  }
+
+  function hideTodoDropdown() {
+    todoDropdownEl.classList.add('hidden');
+    todoFocusedIdx = -1;
+    todoResults = [];
+  }
+
+  function pickTodoTask(t) {
+    todoSelectedTask = t;
+    todoSearchEl.value = '';
+    hideTodoDropdown();
+    todoChipId.textContent = `#${t.id}`;
+    todoChipTitle.textContent = t.title;
+    todoChip.classList.remove('hidden');
+    todoSearchEl.placeholder = 'Add a note (optional)…';
+    todoSearchEl.focus();
+  }
+
+  function clearTodoTask() {
+    todoSelectedTask = null;
+    todoChip.classList.add('hidden');
+    todoSearchEl.placeholder = 'Search work item or type free text…';
+    todoSearchEl.value = '';
+    todoSearchEl.focus();
+  }
+
+  function addTodoItem() {
+    const text = todoSearchEl.value.trim();
+    if (!text && !todoSelectedTask) return;
+    const items = load(K.TODO, []);
+    items.push({
+      id:          Date.now() + Math.random(),
+      text:        text || todoSelectedTask.title,
+      taskId:      todoSelectedTask ? todoSelectedTask.id : null,
+      taskTitle:   todoSelectedTask ? todoSelectedTask.title : null,
+      parentId:    todoSelectedTask ? (todoSelectedTask.parentId || null) : null,
+      parentTitle: todoSelectedTask ? (todoSelectedTask.parentTitle || null) : null,
+      done:        false,
+    });
+    save(K.TODO, items);
+    clearTodoTask();
+    todoSearchEl.value = '';
+    renderTodo();
+  }
+
+  function toggleTodoDone(id) {
+    const items = load(K.TODO, []);
+    const item = items.find(i => String(i.id) === String(id));
+    if (item) item.done = !item.done;
+    save(K.TODO, items);
+    renderTodo();
+  }
+
+  function deleteTodoItem(id) {
+    save(K.TODO, load(K.TODO, []).filter(i => String(i.id) !== String(id)));
+    renderTodo();
+  }
+
+  function clearCompletedTodos() {
+    save(K.TODO, load(K.TODO, []).filter(i => !i.done));
+    renderTodo();
+  }
+
+  function renderTodo() {
+    const all   = load(K.TODO, []);
+    const open  = all.filter(i => !i.done);
+    const done  = all.filter(i =>  i.done);
+    const items = [...open, ...done];
+    todoList.innerHTML = '';
+    if (!items.length) {
+      todoList.innerHTML = '<li class="todo-empty">No items yet — add one above.</li>';
+      return;
+    }
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = `todo-item${item.done ? ' done' : ''}`;
+      const taskLink = item.taskId
+        ? `<a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${item.taskId}" target="_blank" rel="noopener" class="ado-link" style="font-family:var(--mono);font-size:0.72rem;font-weight:700">#${esc(item.taskId)}</a>`
+        : '';
+      const parentLink = item.parentId
+        ? `<a href="https://dev.azure.com/storee/Storee%20Product%20Development/_workitems/edit/${item.parentId}" target="_blank" rel="noopener" class="ado-link parent-link" style="font-size:0.72rem" title="${esc(item.parentTitle || '')}">#${esc(item.parentId)}</a>`
+        : '';
+      const displayTitle = item.taskId ? (item.text !== item.taskTitle ? item.text : item.taskTitle) : item.text;
+      li.innerHTML = `
+        <input type="checkbox" class="todo-cb" ${item.done ? 'checked' : ''} data-todo-id="${item.id}">
+        <div class="todo-item-body">
+          ${(taskLink || parentLink) ? `<div class="todo-item-meta">${taskLink}${parentLink}</div>` : ''}
+          <div class="todo-item-title">${esc(displayTitle)}</div>
+        </div>
+        <button class="todo-item-del" data-todo-del="${item.id}" aria-label="Delete">✕</button>
+      `;
+      todoList.appendChild(li);
+    }
+  }
+
+  // TODO events
+  todoSearchEl.addEventListener('input', () => {
+    if (todoSelectedTask) { hideTodoDropdown(); return; }
+    const q = todoSearchEl.value.trim();
+    if (!q) { hideTodoDropdown(); return; }
+    renderTodoDropdown(search(q));
+  });
+  todoSearchEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { hideTodoDropdown(); addTodoItem(); return; }
+    if (e.key === 'Escape') { hideTodoDropdown(); return; }
+    const items = todoDropdownEl.querySelectorAll('.dropdown-item');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); todoFocusedIdx = Math.min(items.length - 1, todoFocusedIdx + 1); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); todoFocusedIdx = Math.max(0, todoFocusedIdx - 1); }
+    items.forEach((el, i) => el.classList.toggle('focused', i === todoFocusedIdx));
+    if (e.key === 'Enter' && todoFocusedIdx >= 0) { e.preventDefault(); pickTodoTask(todoResults[todoFocusedIdx]); }
+  });
+  todoSearchEl.addEventListener('blur', () => setTimeout(hideTodoDropdown, 160));
+  todoChipClear.addEventListener('click', clearTodoTask);
+  $('todo-add-btn').addEventListener('click', addTodoItem);
+  $('todo-clear-done-btn').addEventListener('click', clearCompletedTodos);
+  todoList.addEventListener('change', e => {
+    const cb = e.target.closest('.todo-cb');
+    if (cb) toggleTodoDone(cb.dataset.todoId);
+  });
+  todoList.addEventListener('click', e => {
+    const del = e.target.closest('.todo-item-del');
+    if (del) deleteTodoItem(del.dataset.todoDel);
+  });
+
+  // ── Init ─────────────────────────────────────────────────
+  function init() {
+    expandedDays.add(todayKey());
+    renderLog();
+    renderRetro();
+    renderTodo();
+    setupNotifyTimer();
+
+    const active = load(K.ACTIVE, null);
+    if (active) {
+      showActive(active);
+      newEntry.classList.add('hidden');
+    }
+
+    const pat = getPat();
+    if (!pat) {
+      syncLabel.textContent = 'no PAT';
+    }
+
+    tasks = load(K.TASKS, []);
+    const fetchedAt = load(K.FETCHED, 0);
+    if (tasks.length && !pat) {
+      syncLabel.textContent = `${tasks.length} cached`;
+    } else if (tasks.length && (Date.now() - fetchedAt < TTL)) {
+      syncLabel.textContent = `${tasks.length} tasks · ${fmtTime(fetchedAt)}`;
+    } else {
+      loadTasks(false);
+    }
+  }
+
+  // ── Auth ─────────────────────────────────────────────────
+  const authScreen    = $('auth-screen');
+  const authTabSignin = $('auth-tab-signin');
+  const authTabSignup = $('auth-tab-signup');
+  const authEmail     = $('auth-email');
+  const authPassword  = $('auth-password');
+  const authPasswordRow = $('auth-password-row');
+  const authSubmitBtn = $('auth-submit-btn');
+  const authMagicBtn  = $('auth-magic-link-btn');
+  const authForgotBtn = $('auth-forgot-btn');
+  const authError     = $('auth-error');
+  const authStatus    = $('auth-status');
+  const userEmailLabel= $('user-email-label');
+  const signoutBtn    = $('signout-btn');
+
+  let authMode = 'signin'; // 'signin' | 'signup'
+  let appStarted = false;
+
+  function showAuthError(msg) {
+    authStatus.classList.add('hidden');
+    authError.textContent = msg;
+    authError.classList.remove('hidden');
+  }
+  function showAuthStatus(msg) {
+    authError.classList.add('hidden');
+    authStatus.textContent = msg;
+    authStatus.classList.remove('hidden');
+  }
+  function clearAuthMessages() {
+    authError.classList.add('hidden');
+    authStatus.classList.add('hidden');
+  }
+  function setAuthMode(mode) {
+    authMode = mode;
+    clearAuthMessages();
+    authTabSignin.classList.toggle('active', mode === 'signin');
+    authTabSignup.classList.toggle('active', mode === 'signup');
+    authSubmitBtn.textContent = mode === 'signin' ? 'Sign in' : 'Create account';
+  }
+  authTabSignin.addEventListener('click', () => setAuthMode('signin'));
+  authTabSignup.addEventListener('click', () => setAuthMode('signup'));
+
+  authSubmitBtn.addEventListener('click', async () => {
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    if (!email || !password) { showAuthError('Enter an email and password.'); return; }
+    authSubmitBtn.disabled = true;
+    clearAuthMessages();
+    try {
+      if (authMode === 'signin') {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      } else {
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data && data.user && !data.session) {
+          showAuthStatus('Check your email to confirm your account, then sign in.');
+        }
+      }
+    } catch (err) {
+      showAuthError(err.message || 'Something went wrong.');
+    } finally {
+      authSubmitBtn.disabled = false;
+    }
+  });
+
+  authMagicBtn.addEventListener('click', async () => {
+    const email = authEmail.value.trim();
+    if (!email) { showAuthError('Enter your email first.'); return; }
+    clearAuthMessages();
+    try {
+      const { error } = await sb.auth.signInWithOtp({ email });
+      if (error) throw error;
+      showAuthStatus('Magic link sent — check your email.');
+    } catch (err) {
+      showAuthError(err.message || 'Could not send magic link.');
+    }
+  });
+
+  authForgotBtn.addEventListener('click', async () => {
+    const email = authEmail.value.trim();
+    if (!email) { showAuthError('Enter your email first.'); return; }
+    clearAuthMessages();
+    try {
+      const { error } = await sb.auth.resetPasswordForEmail(email);
+      if (error) throw error;
+      showAuthStatus('Password reset email sent.');
+    } catch (err) {
+      showAuthError(err.message || 'Could not send reset email.');
+    }
+  });
+
+  signoutBtn.addEventListener('click', async () => {
+    if (!confirm('Sign out of Punch?')) return;
+    await sb.auth.signOut();
+  });
+
+  function clearLocalAppData() {
+    for (const k of Object.values(K)) drop(k);
+  }
+
+  async function startApp() {
+    if (appStarted) return;
+    appStarted = true;
+    document.body.classList.remove('pre-auth');
+    userEmailLabel.textContent = currentUser.email || '';
+    init();
+  }
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session && session.user) {
+      currentUser = session.user;
+      if (!appStarted) {
+        suppressSync = true;
+        clearLocalAppData();
+        suppressSync = false;
+        await pullFromCloud();
+        await startApp();
+      }
+    } else {
+      currentUser = null;
+      appStarted = false;
+      suppressSync = true;
+      clearLocalAppData();
+      suppressSync = false;
+      document.body.classList.add('pre-auth');
+      authEmail.value = '';
+      authPassword.value = '';
+      clearAuthMessages();
+    }
+  });
+})();
+</script>
+</body>
+</html>
