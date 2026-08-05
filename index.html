@@ -1351,6 +1351,11 @@ select.input { cursor: pointer; }
     // K.TASKS / K.FETCHED — local API cache only, not synced
   }
 
+  function unwrap(result) {
+    if (result && result.error) throw result.error;
+    return result;
+  }
+
   async function pushLog(log) {
     if (!currentUser) return;
     const rows = (log || []).map(e => ({
@@ -1362,9 +1367,9 @@ select.input { cursor: pointer; }
       comment: e.comment ?? null, synced_to_ado: !!e.syncedToAdo,
     }));
     try {
-      await sb.from('log_entries').delete().eq('user_id', currentUser.id);
-      if (rows.length) await sb.from('log_entries').insert(rows);
-    } catch (err) { console.warn('log sync failed', err); }
+      unwrap(await sb.from('log_entries').delete().eq('user_id', currentUser.id));
+      if (rows.length) unwrap(await sb.from('log_entries').insert(rows));
+    } catch (err) { notifySyncError('log sync failed', err); }
   }
 
   async function pushRetro(items) {
@@ -1373,9 +1378,9 @@ select.input { cursor: pointer; }
       id: String(i.id), user_id: currentUser.id, bucket: i.bucket, item_text: i.text,
     }));
     try {
-      await sb.from('retro_items').delete().eq('user_id', currentUser.id);
-      if (rows.length) await sb.from('retro_items').insert(rows);
-    } catch (err) { console.warn('retro sync failed', err); }
+      unwrap(await sb.from('retro_items').delete().eq('user_id', currentUser.id));
+      if (rows.length) unwrap(await sb.from('retro_items').insert(rows));
+    } catch (err) { notifySyncError('retro sync failed', err); }
   }
 
   async function pushTodo(items) {
@@ -1386,29 +1391,29 @@ select.input { cursor: pointer; }
       parent_id: i.parentId ?? null, parent_title: i.parentTitle ?? null, done: !!i.done,
     }));
     try {
-      await sb.from('todo_items').delete().eq('user_id', currentUser.id);
-      if (rows.length) await sb.from('todo_items').insert(rows);
-    } catch (err) { console.warn('todo sync failed', err); }
+      unwrap(await sb.from('todo_items').delete().eq('user_id', currentUser.id));
+      if (rows.length) unwrap(await sb.from('todo_items').insert(rows));
+    } catch (err) { notifySyncError('todo sync failed', err); }
   }
 
   async function pushActive(entry) {
     if (!currentUser) return;
     try {
-      if (!entry) { await sb.from('active_timer').delete().eq('user_id', currentUser.id); return; }
-      await sb.from('active_timer').upsert({
+      if (!entry) { unwrap(await sb.from('active_timer').delete().eq('user_id', currentUser.id)); return; }
+      unwrap(await sb.from('active_timer').upsert({
         user_id: currentUser.id,
         task_id: entry.taskId ?? null, task_title: entry.taskTitle, task_type: entry.taskType ?? null,
         parent_id: entry.parentId ?? null, parent_title: entry.parentTitle ?? null,
         start_time: entry.startTime, note: entry.note ?? null, updated_at: new Date().toISOString(),
-      });
-    } catch (err) { console.warn('active sync failed', err); }
+      }));
+    } catch (err) { notifySyncError('active sync failed', err); }
   }
 
   async function pushSettings() {
     if (!currentUser) return;
     const pat = load(K.PAT, '');
     try {
-      await sb.from('settings').upsert({
+      unwrap(await sb.from('settings').upsert({
         user_id: currentUser.id,
         week_start: load(K.WEEK_START, 0),
         round_increment: load(K.ROUND_INCREMENT, 30),
@@ -1417,10 +1422,10 @@ select.input { cursor: pointer; }
         work_end: load(K.WORK_END, ''),
         notify_interval: load(K.NOTIFY_INTERVAL, 0),
         updated_at: new Date().toISOString(),
-      });
+      }));
       // PAT is stored as an encrypted Vault secret via RPC, never in this table directly
-      await sb.rpc('set_ado_pat', { p_pat: pat || '' });
-    } catch (err) { console.warn('settings sync failed', err); }
+      unwrap(await sb.rpc('set_ado_pat', { p_pat: pat || '' }));
+    } catch (err) { notifySyncError('settings sync failed', err); }
   }
 
   async function pullFromCloud() {
@@ -1482,7 +1487,14 @@ select.input { cursor: pointer; }
     }
   }
 
-  // ── Formatting ───────────────────────────────────────────
+  let lastSyncErrorToastAt = 0;
+  function notifySyncError(context, err) {
+    console.warn(context, err);
+    const now = Date.now();
+    if (now - lastSyncErrorToastAt < 10000) return; // avoid spamming toasts
+    lastSyncErrorToastAt = now;
+    toast('Sync to your account failed — changes are saved on this device only for now.', 'error');
+  }
   function fmt(ms) {
     const s = Math.floor(ms / 1000);
     return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
