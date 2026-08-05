@@ -163,6 +163,8 @@ body.pre-auth #auth-screen { display: flex; }
   box-shadow: var(--shadow-lg);
   padding: 1.5rem;
   width: min(420px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
   display: flex; flex-direction: column; gap: 1.1rem;
 }
 .modal-title {
@@ -922,6 +924,53 @@ select.input { cursor: pointer; }
 .todo-footer { display: flex; justify-content: flex-end; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .todo-empty { font-size: 0.95rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
 
+/* ── Team ── */
+.team-live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); margin-left: 0.4rem; vertical-align: middle;
+  box-shadow: 0 0 0 rgba(var(--green-rgb), 0.5);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--green-rgb), 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(var(--green-rgb), 0); }
+}
+.invite-box {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.75rem 0.9rem;
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+}
+.invite-code {
+  font-family: var(--mono); font-size: 1.1rem; font-weight: 700;
+  letter-spacing: 0.08em; color: var(--accent);
+}
+.invite-list { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
+.invite-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  font-size: 0.9rem; padding: 0.4rem 0.6rem;
+  background: var(--surface-2); border-radius: var(--r);
+}
+.invite-row-code { font-family: var(--mono); font-weight: 700; color: var(--text); }
+.invite-row-meta { color: var(--text-muted); font-size: 0.85rem; flex: 1; }
+.roster-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+.roster-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-2); border-radius: var(--r);
+}
+.roster-avatar {
+  width: 2rem; height: 2rem; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-dim); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700; font-family: var(--ui);
+}
+.roster-body { flex: 1; min-width: 0; }
+.roster-email { font-size: 0.92rem; color: var(--text); font-weight: 600; }
+.roster-status { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.1rem; }
+.roster-status.working { color: var(--green); }
+.roster-today { font-size: 0.82rem; color: var(--text-muted); flex-shrink: 0; text-align: right; }
+.team-empty { font-size: 0.9rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
+
 /* ── Responsive ── */
 @media (max-width: 480px) {
   .timer-display { font-size: 2.4rem; }
@@ -968,6 +1017,19 @@ select.input { cursor: pointer; }
         <option value="light">Light</option>
         <option value="dark">Dark</option>
       </select>
+    </div>
+    <label class="checkbox-row">
+      <input type="checkbox" id="is-manager-checkbox">
+      I'm a manager — let me invite and monitor a team
+    </label>
+    <div class="form-row">
+      <label class="form-label" for="join-code-input">Have an invite code?</label>
+      <div style="display:flex; gap:0.4rem;">
+        <input type="text" id="join-code-input" class="input" placeholder="e.g. A1B2C3D4"
+          autocomplete="off" spellcheck="false" style="text-transform:uppercase;">
+        <button type="button" class="btn btn-ghost" id="join-team-btn">Join</button>
+      </div>
+      <div id="join-team-status" class="hidden" style="font-size:0.85rem;"></div>
     </div>
     <div class="form-row">
       <label class="form-label" for="pat-input">Azure DevOps Personal Access Token</label>
@@ -1068,6 +1130,7 @@ select.input { cursor: pointer; }
   <button class="tab-btn active" data-tab="timer">Timer</button>
   <button class="tab-btn" data-tab="retro">Retro</button>
   <button class="tab-btn" data-tab="todo">TODO</button>
+  <button class="tab-btn hidden" data-tab="team" id="team-tab-btn">Team</button>
 </div>
 
 <main class="app-shell">
@@ -1247,6 +1310,23 @@ select.input { cursor: pointer; }
   </div>
 </div><!-- /tab-todo -->
 
+<div id="tab-team" class="tab-panel">
+  <div class="section-card">
+    <div class="section-eyebrow">Invite a team member</div>
+    <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="create-invite-btn">Generate invite code</button>
+      <span style="font-size:0.85rem; color:var(--text-muted);">Each code works once and expires in 14 days.</span>
+    </div>
+    <div id="new-invite-box" class="invite-box hidden" style="margin-top:0.85rem;"></div>
+    <ul class="invite-list" id="invites-list"></ul>
+  </div>
+
+  <div class="section-card" style="margin-top:1.25rem;">
+    <div class="section-eyebrow">Team<span class="team-live-dot" id="team-live-dot" title="Live updates on"></span></div>
+    <ul class="roster-list" id="team-roster"></ul>
+  </div>
+</div><!-- /tab-team -->
+
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1281,6 +1361,7 @@ select.input { cursor: pointer; }
     TODO:            'punch_todo',
     GAP_THRESHOLD:   'punch_gap_threshold',
     THEME:           'punch_theme',
+    IS_MANAGER:      'punch_is_manager',
   };
 
   const ORG     = 'storee';
@@ -1364,6 +1445,16 @@ select.input { cursor: pointer; }
   const weekNext        = $('week-next');
   const weekStartSelect = $('week-start-select');
   const themeSelect     = $('theme-select');
+  const isManagerCheckbox = $('is-manager-checkbox');
+  const joinCodeInput   = $('join-code-input');
+  const joinTeamBtn     = $('join-team-btn');
+  const joinTeamStatus  = $('join-team-status');
+  const teamTabBtn      = $('team-tab-btn');
+  const createInviteBtn = $('create-invite-btn');
+  const newInviteBox    = $('new-invite-box');
+  const invitesList     = $('invites-list');
+  const teamRoster       = $('team-roster');
+  const teamLiveDot      = $('team-live-dot');
   const roundSelect          = $('round-select');
   const gapThresholdSelect   = $('gap-threshold-select');
   const workStartInput  = $('work-start-input');
@@ -1404,7 +1495,7 @@ select.input { cursor: pointer; }
   // ── Cloud sync ───────────────────────────────────────────
   const SETTINGS_KEYS = new Set([
     K.WEEK_START, K.ROUND_INCREMENT, K.GAP_THRESHOLD,
-    K.WORK_START, K.WORK_END, K.NOTIFY_INTERVAL, K.PAT, K.THEME,
+    K.WORK_START, K.WORK_END, K.NOTIFY_INTERVAL, K.PAT, K.THEME, K.IS_MANAGER,
   ]);
 
   function queueCloudSync(key, val) {
@@ -1488,6 +1579,7 @@ select.input { cursor: pointer; }
         work_end: load(K.WORK_END, ''),
         notify_interval: load(K.NOTIFY_INTERVAL, 0),
         theme: load(K.THEME, 'light'),
+        is_manager: load(K.IS_MANAGER, false),
         updated_at: new Date().toISOString(),
       }));
       // PAT is stored as an encrypted Vault secret via RPC, never in this table directly
@@ -1518,6 +1610,8 @@ select.input { cursor: pointer; }
         localStorage.setItem(K.NOTIFY_INTERVAL, JSON.stringify(s.notify_interval ?? 0));
         localStorage.setItem(K.THEME, JSON.stringify(s.theme || 'light'));
         applyTheme(s.theme || 'light');
+        localStorage.setItem(K.IS_MANAGER, JSON.stringify(!!s.is_manager));
+        updateTeamTabVisibility();
         const pat = patRes && !patRes.error ? patRes.data : null;
         if (s.remember_pat && pat) localStorage.setItem(K.PAT, JSON.stringify(pat));
         else localStorage.removeItem(K.PAT);
@@ -2783,6 +2877,9 @@ select.input { cursor: pointer; }
     patInput.value = getPat() || '';
     rememberPat.checked = !!getPat();
     themeSelect.value = load(K.THEME, 'light');
+    isManagerCheckbox.checked = load(K.IS_MANAGER, false);
+    joinCodeInput.value = '';
+    joinTeamStatus.classList.add('hidden');
     weekStartSelect.value = String(load(K.WEEK_START, 0));
     roundSelect.value         = String(load(K.ROUND_INCREMENT, 30));
     gapThresholdSelect.value  = String(load(K.GAP_THRESHOLD, 15));
@@ -2803,6 +2900,8 @@ select.input { cursor: pointer; }
   function closeSettings() { settingsModal.classList.add('hidden'); }
   async function saveSettings() {
     const pat = patInput.value.trim();
+    save(K.IS_MANAGER, isManagerCheckbox.checked);
+    updateTeamTabVisibility();
     save(K.WEEK_START, Number(weekStartSelect.value));
     save(K.ROUND_INCREMENT, Number(roundSelect.value));
     save(K.GAP_THRESHOLD, Number(gapThresholdSelect.value));
@@ -2982,8 +3081,192 @@ select.input { cursor: pointer; }
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       $('tab-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'team') {
+        renderInvites();
+        renderTeam();
+        startTeamLiveUpdates();
+      } else {
+        stopTeamLiveUpdates();
+      }
     });
   });
+
+  // ── Team & invites ───────────────────────────────────────
+  function updateTeamTabVisibility() {
+    const isManager = load(K.IS_MANAGER, false);
+    teamTabBtn.classList.toggle('hidden', !isManager);
+    if (!isManager && teamTabBtn.classList.contains('active')) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelector('.tab-btn[data-tab="timer"]').classList.add('active');
+      $('tab-timer').classList.add('active');
+      stopTeamLiveUpdates();
+    }
+  }
+
+  function generateInviteCode() {
+    if (window.crypto && crypto.randomUUID) {
+      return crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    }
+    return Math.random().toString(36).slice(2, 10).toUpperCase();
+  }
+
+  createInviteBtn.addEventListener('click', async () => {
+    if (!currentUser) return;
+    createInviteBtn.disabled = true;
+    try {
+      let lastErr = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const code = generateInviteCode();
+        const { error } = await sb.from('invites').insert({ code, manager_id: currentUser.id });
+        if (!error) {
+          newInviteBox.classList.remove('hidden');
+          newInviteBox.innerHTML = `
+            <span class="invite-code">${esc(code)}</span>
+            <button class="btn btn-ghost btn-sm" id="copy-invite-btn">Copy</button>
+            <span style="font-size:0.8rem;color:var(--text-muted);">Expires in 14 days</span>
+          `;
+          $('copy-invite-btn').addEventListener('click', async () => {
+            try { await navigator.clipboard.writeText(code); toast('Invite code copied.', 'success'); }
+            catch { toast('Could not copy — select and copy manually.', 'error'); }
+          });
+          await renderInvites();
+          lastErr = null;
+          break;
+        }
+        lastErr = error;
+      }
+      if (lastErr) throw lastErr;
+    } catch (err) {
+      toast('Could not create invite code.', 'error');
+      console.warn('create invite failed', err);
+    } finally {
+      createInviteBtn.disabled = false;
+    }
+  });
+
+  async function renderInvites() {
+    if (!currentUser) return;
+    const { data, error } = await sb.from('invites')
+      .select('*')
+      .eq('manager_id', currentUser.id)
+      .is('used_at', null)
+      .gte('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false });
+    if (error) { console.warn('load invites failed', error); return; }
+    if (!data || !data.length) {
+      invitesList.innerHTML = '<li class="team-empty">No pending invites.</li>';
+      return;
+    }
+    invitesList.innerHTML = data.map(inv => `
+      <li class="invite-row">
+        <span class="invite-row-code">${esc(inv.code)}</span>
+        <span class="invite-row-meta">Expires ${new Date(inv.expires_at).toLocaleDateString()}</span>
+        <button class="btn btn-ghost btn-sm" data-revoke-id="${esc(inv.id)}">Revoke</button>
+      </li>
+    `).join('');
+    invitesList.querySelectorAll('[data-revoke-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const { error } = await sb.from('invites').delete().eq('id', btn.dataset.revokeId);
+        if (error) { toast('Could not revoke invite.', 'error'); btn.disabled = false; return; }
+        await renderInvites();
+      });
+    });
+  }
+
+  joinTeamBtn.addEventListener('click', () => redeemInviteCode(joinCodeInput.value.trim()));
+
+  async function redeemInviteCode(code) {
+    if (!code) return;
+    joinTeamStatus.classList.remove('hidden');
+    joinTeamStatus.style.color = 'var(--text-muted)';
+    joinTeamStatus.textContent = 'Joining…';
+    joinTeamBtn.disabled = true;
+    try {
+      const { data, error } = await sb.rpc('redeem_invite', { p_code: code.toUpperCase() });
+      if (error) throw error;
+      const managerEmail = data && data[0] && data[0].manager_email;
+      joinTeamStatus.style.color = 'var(--green)';
+      joinTeamStatus.textContent = managerEmail
+        ? `You've joined ${managerEmail}'s team.`
+        : `You've joined the team.`;
+      joinCodeInput.value = '';
+      toast('Joined team.', 'success');
+    } catch (err) {
+      joinTeamStatus.style.color = 'var(--red)';
+      joinTeamStatus.textContent = err.message || 'Could not redeem that code.';
+    } finally {
+      joinTeamBtn.disabled = false;
+    }
+  }
+
+  function fmtElapsed(startMs) {
+    const mins = Math.max(0, Math.floor((Date.now() - startMs) / 60000));
+    if (mins < 60) return `${mins}m`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  }
+
+  async function renderTeam() {
+    if (!currentUser) return;
+    const { data: members, error: memErr } = await sb.from('team_members').select('member_id').eq('manager_id', currentUser.id);
+    if (memErr) { console.warn('load team failed', memErr); return; }
+    const memberIds = (members || []).map(m => m.member_id);
+    if (!memberIds.length) {
+      teamRoster.innerHTML = '<li class="team-empty">No team members yet — generate an invite code above.</li>';
+      return;
+    }
+
+    const [{ data: profiles }, { data: activeRows }, { data: todayRows }] = await Promise.all([
+      sb.from('profiles').select('id, email').in('id', memberIds),
+      sb.from('active_timer').select('*').in('user_id', memberIds),
+      sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
+    ]);
+
+    const emailById = {};
+    (profiles || []).forEach(p => { emailById[p.id] = p.email || '(no email on file)'; });
+    const activeById = {};
+    (activeRows || []).forEach(a => { activeById[a.user_id] = a; });
+    const totalById = {};
+    (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
+
+    teamRoster.innerHTML = memberIds.map(id => {
+      const email = emailById[id] || id;
+      const initial = (email[0] || '?').toUpperCase();
+      const active = activeById[id];
+      const todayMs = totalById[id] || 0;
+      const todayStr = fmtHM(todayMs);
+      const statusHtml = active
+        ? `<div class="roster-status working">Working on ${active.task_id ? '#' + esc(active.task_id) + ' — ' : ''}${esc(active.task_title || 'untitled')} (${fmtElapsed(active.start_time)})</div>`
+        : `<div class="roster-status">Idle</div>`;
+      return `
+        <li class="roster-row">
+          <div class="roster-avatar">${esc(initial)}</div>
+          <div class="roster-body">
+            <div class="roster-email">${esc(email)}</div>
+            ${statusHtml}
+          </div>
+          <div class="roster-today">Today<br>${esc(todayStr)}</div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  let teamChannel = null;
+  let teamPollTimer = null;
+  function startTeamLiveUpdates() {
+    stopTeamLiveUpdates();
+    teamPollTimer = setInterval(renderTeam, 15000);
+    try {
+      teamChannel = sb.channel('team-active-timer')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, () => renderTeam())
+        .subscribe();
+    } catch (err) { console.warn('realtime subscribe failed', err); }
+  }
+  function stopTeamLiveUpdates() {
+    if (teamPollTimer) { clearInterval(teamPollTimer); teamPollTimer = null; }
+    if (teamChannel) { sb.removeChannel(teamChannel); teamChannel = null; }
+  }
 
   // ── Retro ────────────────────────────────────────────────
   const RETRO_BUCKETS = [
@@ -3344,7 +3627,14 @@ select.input { cursor: pointer; }
     appStarted = true;
     document.body.classList.remove('pre-auth');
     userEmailLabel.textContent = currentUser.email || '';
+    updateTeamTabVisibility();
     init();
+    const urlInvite = new URLSearchParams(location.search).get('invite');
+    if (urlInvite) {
+      history.replaceState(null, '', location.pathname + location.hash);
+      await redeemInviteCode(urlInvite.trim());
+      openSettings();
+    }
   }
 
   sb.auth.onAuthStateChange(async (event, session) => {
@@ -3360,6 +3650,7 @@ select.input { cursor: pointer; }
     } else {
       currentUser = null;
       appStarted = false;
+      stopTeamLiveUpdates();
       suppressSync = true;
       clearLocalAppData();
       suppressSync = false;
