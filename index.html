@@ -227,6 +227,15 @@ header {
 }
 .icon-btn:hover { color: var(--text); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
+.icon-btn-sm {
+  background: none; border: none;
+  cursor: pointer; color: var(--text-muted);
+  font-size: 0.78rem; padding: 0.1rem 0.2rem;
+  line-height: 1; transition: color 0.15s;
+}
+.icon-btn-sm:hover { color: var(--text); }
+.icon-btn-sm:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
+.org-name-display { display: inline-flex; align-items: center; gap: 0.35rem; }
 
 /* ── Main ── */
 main {
@@ -1041,6 +1050,13 @@ body.settings-open #settings-page { display: flex; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--r); padding: 0.3rem 0.6rem; font-size: 0.85rem;
 }
+.team-checklist { display: flex; flex-direction: column; gap: 0.25rem; }
+.team-check-item {
+  display: flex; align-items: center; gap: 0.35rem;
+  font-size: 0.82rem; color: var(--text-muted); cursor: pointer;
+  white-space: nowrap;
+}
+.team-check-item input { accent-color: var(--blue); }
 
 /* ── Responsive ── */
 @media (max-width: 480px) {
@@ -3404,13 +3420,59 @@ body.settings-open #settings-page { display: flex; }
     orgList.innerHTML = orgs.map(org => `
       <div class="org-card" style="margin-top:0.85rem;" data-org-id="${esc(org.id)}">
         <div class="org-card-header">
-          <span class="org-name">${esc(org.name)}</span>
+          <span class="org-name-display">
+            <span class="org-name">${esc(org.name)}</span>
+            ${org.owner_id === currentUser.id ? `
+              <button class="icon-btn-sm org-rename-btn" title="Rename organization" aria-label="Rename organization">✎</button>
+              <button class="icon-btn-sm org-delete-btn" title="Delete organization" aria-label="Delete organization">🗑</button>
+            ` : ''}
+          </span>
           <span class="org-role-badge">${org.owner_id === currentUser.id ? 'Owner' : 'Member'}</span>
+        </div>
+        <div class="org-rename-row" style="display:none; gap:0.4rem; margin-top:0.5rem;">
+          <input type="text" class="input org-rename-input" value="${esc(org.name)}" style="max-width:260px;">
+          <button class="btn btn-primary btn-sm org-rename-save">Save</button>
+          <button class="btn btn-ghost btn-sm org-rename-cancel">Cancel</button>
         </div>
         <div class="org-member-status" style="font-size:0.85rem;color:var(--text-muted);margin-top:0.3rem;"></div>
         <div class="org-manage active"></div>
       </div>
     `).join('');
+
+    orgList.querySelectorAll('.org-card').forEach(card => {
+      const orgId = card.dataset.orgId;
+      const renameBtn = card.querySelector('.org-rename-btn');
+      const deleteBtn = card.querySelector('.org-delete-btn');
+      const renameRow = card.querySelector('.org-rename-row');
+      if (renameBtn) {
+        renameBtn.addEventListener('click', () => {
+          renameRow.style.display = 'flex';
+          card.querySelector('.org-rename-input').focus();
+        });
+        card.querySelector('.org-rename-cancel').addEventListener('click', () => { renameRow.style.display = 'none'; });
+        card.querySelector('.org-rename-save').addEventListener('click', async () => {
+          const input = card.querySelector('.org-rename-input');
+          const name = input.value.trim();
+          if (!name) return;
+          const { error } = await sb.from('organizations').update({ name }).eq('id', orgId);
+          if (error) { toast('Could not rename organization.', 'error'); return; }
+          toast('Organization renamed.', 'success');
+          renderOrgList();
+          renderOrgSwitcher();
+        });
+      }
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+          const org = orgs.find(o => o.id === orgId);
+          if (!confirm(`Delete "${org ? org.name : 'this organization'}"? This removes all its teams, members, and invites. This can't be undone.`)) return;
+          const { error } = await sb.from('organizations').delete().eq('id', orgId);
+          if (error) { toast('Could not delete organization.', 'error'); return; }
+          toast('Organization deleted.', 'success');
+          renderOrgList();
+          renderOrgSwitcher();
+        });
+      }
+    });
 
     for (const org of orgs) {
       const card = orgList.querySelector(`[data-org-id="${CSS.escape(org.id)}"]`);
@@ -3464,11 +3526,11 @@ body.settings-open #settings-page { display: flex; }
     if (profilesErr) notifySyncError('load member profiles failed', profilesErr);
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
-    const teamIdByUser = {};
-    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
-
-    const teamOptionsHtml = ['<option value="">Unassigned</option>']
-      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
+    const teamIdsByUser = {};
+    (assignments || []).forEach(a => {
+      if (!teamIdsByUser[a.user_id]) teamIdsByUser[a.user_id] = new Set();
+      teamIdsByUser[a.user_id].add(a.team_id);
+    });
 
     container.innerHTML = `
       <div>
@@ -3482,8 +3544,14 @@ body.settings-open #settings-page { display: flex; }
       </div>
       <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Teams</div>
-        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;" class="org-team-chips">
+          ${(teams || []).map(t => `
+            <span class="team-chip" data-team-id="${esc(t.id)}">
+              <span class="team-chip-name">${esc(t.name)}</span>
+              <button class="icon-btn-sm team-chip-rename" title="Rename team" aria-label="Rename team">✎</button>
+              <button class="icon-btn-sm team-chip-delete" title="Delete team" aria-label="Delete team">🗑</button>
+            </span>
+          `).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
         </div>
         <div style="display:flex; gap:0.4rem;">
           <input type="text" class="input org-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
@@ -3492,7 +3560,8 @@ body.settings-open #settings-page { display: flex; }
       </div>
       <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
-        <ul class="roster-list org-roster-list"></ul>
+        <span style="font-size:0.8rem;color:var(--text-muted);">A member can belong to more than one team.</span>
+        <ul class="roster-list org-roster-list" style="margin-top:0.5rem;"></ul>
       </div>
     `;
 
@@ -3571,6 +3640,32 @@ body.settings-open #settings-page { display: flex; }
       e.currentTarget.disabled = false;
     });
 
+    container.querySelectorAll('.team-chip-rename').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const chip = btn.closest('.team-chip');
+        const teamId = chip.dataset.teamId;
+        const currentName = chip.querySelector('.team-chip-name').textContent;
+        const name = prompt('Rename team:', currentName);
+        if (!name || !name.trim() || name.trim() === currentName) return;
+        const { error } = await sb.from('teams').update({ name: name.trim() }).eq('id', teamId);
+        if (error) { toast('Could not rename team.', 'error'); return; }
+        toast('Team renamed.', 'success');
+        renderOrgList();
+      });
+    });
+    container.querySelectorAll('.team-chip-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const chip = btn.closest('.team-chip');
+        const teamId = chip.dataset.teamId;
+        const teamName = chip.querySelector('.team-chip-name').textContent;
+        if (!confirm(`Delete the "${teamName}" team? Members will become unassigned. This can't be undone.`)) return;
+        const { error } = await sb.from('teams').delete().eq('id', teamId);
+        if (error) { toast('Could not delete team.', 'error'); return; }
+        toast('Team deleted.', 'success');
+        renderOrgList();
+      });
+    });
+
     const rosterEl = container.querySelector('.org-roster-list');
     if (!memberIds.length) {
       rosterEl.innerHTML = '<li class="team-empty">No members yet — generate an invite code above.</li>';
@@ -3580,6 +3675,15 @@ body.settings-open #settings-page { display: flex; }
         const name = fullNameFor(p);
         const email = (p && p.email) || 'No email on file';
         const initial = (p && p.email ? p.email[0] : name[0] || '?').toUpperCase();
+        const myTeamIds = teamIdsByUser[id] || new Set();
+        const checklistHtml = (teams || []).length
+          ? `<div class="team-checklist" data-user-id="${esc(id)}">${(teams || []).map(t => `
+              <label class="team-check-item">
+                <input type="checkbox" value="${esc(t.id)}" ${myTeamIds.has(t.id) ? 'checked' : ''}>
+                ${esc(t.name)}
+              </label>
+            `).join('')}</div>`
+          : '<span style="font-size:0.8rem;color:var(--text-muted);">No teams yet</span>';
         return `
           <li class="roster-row">
             <div class="roster-avatar">${esc(initial)}</div>
@@ -3587,18 +3691,22 @@ body.settings-open #settings-page { display: flex; }
               <div class="roster-email">${esc(name)}${id === currentUser.id ? ' (you)' : ''}</div>
               <div class="roster-email-sub">${esc(email)}</div>
             </div>
-            <select class="input org-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
+            ${checklistHtml}
           </li>
         `;
       }).join('');
-      rosterEl.querySelectorAll('.org-team-assign').forEach(sel => {
-        sel.value = teamIdByUser[sel.dataset.userId] || '';
-        sel.addEventListener('change', async () => {
-          sel.disabled = true;
-          const teamId = sel.value || null;
-          const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
-          if (error) toast('Could not assign team.', 'error');
-          sel.disabled = false;
+      rosterEl.querySelectorAll('.team-checklist').forEach(list => {
+        list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener('change', async () => {
+            cb.disabled = true;
+            const userId = list.dataset.userId;
+            const teamId = cb.value;
+            const { error } = cb.checked
+              ? await sb.from('team_members').upsert({ org_id: org.id, user_id: userId, team_id: teamId })
+              : await sb.from('team_members').delete().eq('org_id', org.id).eq('user_id', userId).eq('team_id', teamId);
+            if (error) { toast('Could not update team assignment.', 'error'); cb.checked = !cb.checked; }
+            cb.disabled = false;
+          });
         });
       });
     }
@@ -3618,13 +3726,14 @@ body.settings-open #settings-page { display: flex; }
 
     const teamNameById = {};
     (teams || []).forEach(t => { teamNameById[t.id] = t.name; });
-    const teamIdByUser = {};
-    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
 
-    const myTeamId = teamIdByUser[currentUser.id];
-    statusEl.textContent = `Your team: ${myTeamId ? (teamNameById[myTeamId] || 'Unknown') : 'Unassigned'}`;
+    const myTeamNames = (assignments || [])
+      .filter(a => a.user_id === currentUser.id)
+      .map(a => teamNameById[a.team_id] || 'Unknown')
+      .sort();
+    statusEl.textContent = `Your team${myTeamNames.length === 1 ? '' : 's'}: ${myTeamNames.length ? myTeamNames.join(', ') : 'Unassigned'}`;
 
     container.innerHTML = `
       <div>
@@ -3702,21 +3811,26 @@ body.settings-open #settings-page { display: flex; }
 
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
-    const teamIdByUser = {};
-    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
+    const teamIdsByUser = {};
+    (assignments || []).forEach(a => {
+      if (!teamIdsByUser[a.user_id]) teamIdsByUser[a.user_id] = new Set();
+      teamIdsByUser[a.user_id].add(a.team_id);
+    });
     const activeById = {};
     (activeRows || []).forEach(a => { activeById[a.user_id] = a; });
     const totalById = {};
     (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
 
-    // Group members by team, plus an "Unassigned" bucket for anyone not yet placed on a team.
+    // Group members by team; a member with multiple teams appears in each one.
+    // Anyone with zero team assignments appears once, under "Unassigned".
     const groups = (teams || []).map(t => ({ id: t.id, name: t.name, memberIds: [] }));
     const unassigned = { id: null, name: 'Unassigned', memberIds: [] };
     const groupById = {};
     groups.forEach(g => { groupById[g.id] = g; });
     memberIds.forEach(id => {
-      const teamId = teamIdByUser[id];
-      (teamId && groupById[teamId] ? groupById[teamId] : unassigned).memberIds.push(id);
+      const myTeamIds = teamIdsByUser[id];
+      if (!myTeamIds || !myTeamIds.size) { unassigned.memberIds.push(id); return; }
+      myTeamIds.forEach(teamId => { if (groupById[teamId]) groupById[teamId].memberIds.push(id); });
     });
     const allGroups = groups.concat(unassigned.memberIds.length ? [unassigned] : []);
 
