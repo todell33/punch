@@ -3449,17 +3449,26 @@ body.settings-open #settings-page { display: flex; }
   }
 
   async function renderOrgManagePanel(org, container) {
-    const [{ data: invites }, { data: members }] = await Promise.all([
+    const [{ data: invites }, { data: teams }, { data: members }] = await Promise.all([
       sb.from('org_invites').select('*').eq('org_id', org.id).is('used_at', null).gte('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
+      sb.from('teams').select('*').eq('org_id', org.id).order('created_at', { ascending: true }),
       sb.from('org_members').select('user_id').eq('org_id', org.id),
     ]);
     const memberIds = (members || []).map(m => m.user_id);
-    const { data: profiles, error: profilesErr } = memberIds.length
-      ? await sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds)
-      : { data: [] };
+    const [{ data: profiles, error: profilesErr }, { data: assignments }] = memberIds.length
+      ? await Promise.all([
+          sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
+          sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
+        ])
+      : [{ data: [] }, { data: [] }];
     if (profilesErr) notifySyncError('load member profiles failed', profilesErr);
     const profileById = {};
     (profiles || []).forEach(p => { profileById[p.id] = p; });
+    const teamIdByUser = {};
+    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
+
+    const teamOptionsHtml = ['<option value="">Unassigned</option>']
+      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
 
     container.innerHTML = `
       <div>
@@ -3472,8 +3481,18 @@ body.settings-open #settings-page { display: flex; }
         <ul class="invite-list org-invites-list"></ul>
       </div>
       <div>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Teams</div>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
+        </div>
+        <div style="display:flex; gap:0.4rem;">
+          <input type="text" class="input org-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
+          <button class="btn btn-ghost btn-sm org-add-team-btn">Add team</button>
+        </div>
+      </div>
+      <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
-        <div class="org-members-list">${renderSimpleMemberList(memberIds, profileById)}</div>
+        <ul class="roster-list org-roster-list"></ul>
       </div>
     `;
 
@@ -3540,6 +3559,49 @@ body.settings-open #settings-page { display: flex; }
         btn.disabled = false;
       }
     });
+
+    container.querySelector('.org-add-team-btn').addEventListener('click', async (e) => {
+      const input = container.querySelector('.org-new-team-input');
+      const name = input.value.trim();
+      if (!name) return;
+      e.currentTarget.disabled = true;
+      const { error } = await sb.from('teams').insert({ org_id: org.id, name });
+      if (error) toast('Could not add team.', 'error');
+      else { input.value = ''; renderOrgList(); }
+      e.currentTarget.disabled = false;
+    });
+
+    const rosterEl = container.querySelector('.org-roster-list');
+    if (!memberIds.length) {
+      rosterEl.innerHTML = '<li class="team-empty">No members yet — generate an invite code above.</li>';
+    } else {
+      rosterEl.innerHTML = memberIds.map(id => {
+        const p = profileById[id];
+        const name = fullNameFor(p);
+        const email = (p && p.email) || 'No email on file';
+        const initial = (p && p.email ? p.email[0] : name[0] || '?').toUpperCase();
+        return `
+          <li class="roster-row">
+            <div class="roster-avatar">${esc(initial)}</div>
+            <div class="roster-body">
+              <div class="roster-email">${esc(name)}${id === currentUser.id ? ' (you)' : ''}</div>
+              <div class="roster-email-sub">${esc(email)}</div>
+            </div>
+            <select class="input org-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
+          </li>
+        `;
+      }).join('');
+      rosterEl.querySelectorAll('.org-team-assign').forEach(sel => {
+        sel.value = teamIdByUser[sel.dataset.userId] || '';
+        sel.addEventListener('change', async () => {
+          sel.disabled = true;
+          const teamId = sel.value || null;
+          const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
+          if (error) toast('Could not assign team.', 'error');
+          sel.disabled = false;
+        });
+      });
+    }
   }
 
   async function renderOrgMemberPanel(org, container, statusEl) {
@@ -3614,7 +3676,7 @@ body.settings-open #settings-page { display: flex; }
     }
     const { data: org } = await sb.from('organizations').select('*').eq('id', orgId).maybeSingle();
     if (!org || org.owner_id !== currentUser.id) {
-      teamsContent.innerHTML = '<div class="team-empty">You only manage teams for organizations you own. Switch to one you manage using the dropdown above the timer.</div>';
+      teamsContent.innerHTML = '<div class="team-empty">You only see live team status for organizations you own. Switch to one you manage using the dropdown above the timer.</div>';
       return;
     }
 
@@ -3624,14 +3686,17 @@ body.settings-open #settings-page { display: flex; }
     ]);
     const memberIds = (members || []).map(m => m.user_id);
 
-    const [profilesRes, assignRes, activeRes, todayRes] = memberIds.length
-      ? await Promise.all([
-          sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
-          sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
-          sb.from('active_timer').select('*').in('user_id', memberIds),
-          sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
-        ])
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+    if (!memberIds.length) {
+      teamsContent.innerHTML = '<div class="team-empty">No members yet — invite people from Settings → Organizations.</div>';
+      return;
+    }
+
+    const [profilesRes, assignRes, activeRes, todayRes] = await Promise.all([
+      sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
+      sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
+      sb.from('active_timer').select('*').in('user_id', memberIds),
+      sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
+    ]);
     if (profilesRes.error) notifySyncError('load member profiles failed', profilesRes.error);
     const profiles = profilesRes.data, assignments = assignRes.data, activeRows = activeRes.data, todayRows = todayRes.data;
 
@@ -3644,43 +3709,18 @@ body.settings-open #settings-page { display: flex; }
     const totalById = {};
     (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
 
-    const teamOptionsHtml = ['<option value="">Unassigned</option>']
-      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
-
-    teamsContent.innerHTML = `
-      <div class="section-card">
-        <div class="section-eyebrow">Teams in ${esc(org.name)}</div>
-        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin:0.5rem 0;">
-          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
-        </div>
-        <div style="display:flex; gap:0.4rem;">
-          <input type="text" class="input teams-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
-          <button class="btn btn-ghost btn-sm teams-add-team-btn">Add team</button>
-        </div>
-      </div>
-      <div class="section-card" style="margin-top:1.25rem;">
-        <div class="section-eyebrow">Roster<span class="team-live-dot" title="Live updates on"></span></div>
-        <ul class="roster-list teams-roster-list" style="margin-top:0.75rem;"></ul>
-      </div>
-    `;
-
-    teamsContent.querySelector('.teams-add-team-btn').addEventListener('click', async (e) => {
-      const input = teamsContent.querySelector('.teams-new-team-input');
-      const name = input.value.trim();
-      if (!name) return;
-      e.currentTarget.disabled = true;
-      const { error } = await sb.from('teams').insert({ org_id: org.id, name });
-      if (error) toast('Could not add team.', 'error');
-      else { input.value = ''; renderTeamsTab(); }
-      e.currentTarget.disabled = false;
+    // Group members by team, plus an "Unassigned" bucket for anyone not yet placed on a team.
+    const groups = (teams || []).map(t => ({ id: t.id, name: t.name, memberIds: [] }));
+    const unassigned = { id: null, name: 'Unassigned', memberIds: [] };
+    const groupById = {};
+    groups.forEach(g => { groupById[g.id] = g; });
+    memberIds.forEach(id => {
+      const teamId = teamIdByUser[id];
+      (teamId && groupById[teamId] ? groupById[teamId] : unassigned).memberIds.push(id);
     });
+    const allGroups = groups.concat(unassigned.memberIds.length ? [unassigned] : []);
 
-    const rosterEl = teamsContent.querySelector('.teams-roster-list');
-    if (!memberIds.length) {
-      rosterEl.innerHTML = '<li class="team-empty">No members yet — invite people from Settings → Organizations.</li>';
-      return;
-    }
-    rosterEl.innerHTML = memberIds.map(id => {
+    function memberRowHtml(id) {
       const p = profileById[id];
       const name = fullNameFor(p);
       const email = (p && p.email) || 'No email on file';
@@ -3698,21 +3738,22 @@ body.settings-open #settings-page { display: flex; }
             <div class="roster-email-sub">${esc(email)}</div>
             ${statusHtml}
           </div>
-          <select class="input teams-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
           <div class="roster-today">Today<br>${esc(todayStr)}</div>
         </li>
       `;
-    }).join('');
-    rosterEl.querySelectorAll('.teams-team-assign').forEach(sel => {
-      sel.value = teamIdByUser[sel.dataset.userId] || '';
-      sel.addEventListener('change', async () => {
-        sel.disabled = true;
-        const teamId = sel.value || null;
-        const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
-        if (error) toast('Could not assign team.', 'error');
-        sel.disabled = false;
-      });
-    });
+    }
+
+    teamsContent.innerHTML = `
+      <div class="section-eyebrow" style="margin-bottom:0.75rem;">${esc(org.name)}<span class="team-live-dot" title="Live updates on"></span></div>
+      ${allGroups.map(g => `
+        <div class="section-card" style="margin-bottom:1.25rem;">
+          <div class="section-eyebrow">${esc(g.name)}</div>
+          <ul class="roster-list" style="margin-top:0.75rem;">
+            ${g.memberIds.length ? g.memberIds.map(memberRowHtml).join('') : '<li class="team-empty">No members on this team.</li>'}
+          </ul>
+        </div>
+      `).join('')}
+    `;
   }
 
   let orgChannel = null;
