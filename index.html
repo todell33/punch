@@ -3389,13 +3389,7 @@ body.settings-open #settings-page { display: flex; }
       if (org.owner_id === currentUser.id) {
         await renderOrgManagePanel(org, card.querySelector('.org-manage'));
       } else {
-        const { data: tm } = await sb.from('team_members').select('team_id').eq('org_id', org.id).eq('user_id', currentUser.id).maybeSingle();
-        let teamName = 'Unassigned';
-        if (tm) {
-          const { data: team } = await sb.from('teams').select('name').eq('id', tm.team_id).maybeSingle();
-          if (team) teamName = team.name;
-        }
-        card.querySelector('.org-member-status').textContent = `Your team: ${teamName}`;
+        await renderOrgMemberPanel(org, card.querySelector('.org-manage'), card.querySelector('.org-member-status'));
       }
     }
   }
@@ -3566,6 +3560,56 @@ body.settings-open #settings-page { display: flex; }
         });
       });
     }
+  }
+
+  async function renderOrgMemberPanel(org, container, statusEl) {
+    const [{ data: teams }, { data: members }, { data: assignments }] = await Promise.all([
+      sb.from('teams').select('*').eq('org_id', org.id),
+      sb.from('org_members').select('user_id').eq('org_id', org.id),
+      sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
+    ]);
+    const memberIds = (members || []).map(m => m.user_id);
+    const { data: profiles } = memberIds.length
+      ? await sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds)
+      : { data: [] };
+
+    const teamNameById = {};
+    (teams || []).forEach(t => { teamNameById[t.id] = t.name; });
+    const teamIdByUser = {};
+    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
+    const profileById = {};
+    (profiles || []).forEach(p => { profileById[p.id] = p; });
+
+    const myTeamId = teamIdByUser[currentUser.id];
+    statusEl.textContent = `Your team: ${myTeamId ? (teamNameById[myTeamId] || 'Unknown') : 'Unassigned'}`;
+
+    if (!memberIds.length) {
+      container.innerHTML = '<div class="team-empty">No members yet.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <div>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
+        <ul class="roster-list">
+          ${memberIds.map(id => {
+            const p = profileById[id] || {};
+            const displayName = (p.first_name || p.last_name) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p.email || id);
+            const initial = (displayName[0] || '?').toUpperCase();
+            const teamId = teamIdByUser[id];
+            const teamLabel = teamId ? (teamNameById[teamId] || 'Unknown team') : 'Unassigned';
+            return `
+              <li class="roster-row">
+                <div class="roster-avatar">${esc(initial)}</div>
+                <div class="roster-body">
+                  <div class="roster-email">${esc(displayName)}${id === currentUser.id ? ' (you)' : ''}</div>
+                  <div class="roster-status">${esc(teamLabel)}</div>
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
   }
 
   let orgChannel = null;
