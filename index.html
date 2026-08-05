@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DEVPUN.CH</title>
+<title>Punch</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱</text></svg>">
 <script>
   // Applied before first paint so switching to dark mode doesn't flash light first.
@@ -87,6 +87,7 @@ body {
 
 .hidden { display: none !important; }
 body.pre-auth .app-shell { display: none !important; }
+body.settings-open .app-shell { display: none !important; }
 #auth-screen { display: none; }
 body.pre-auth #auth-screen { display: flex; }
 
@@ -971,11 +972,78 @@ select.input { cursor: pointer; }
 .roster-today { font-size: 0.82rem; color: var(--text-muted); flex-shrink: 0; text-align: right; }
 .team-empty { font-size: 0.9rem; color: var(--text-muted); font-style: italic; padding: 0.5rem 0; }
 
+/* ── Settings page ── */
+#settings-page {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--ground);
+  z-index: 150;
+  flex-direction: column;
+}
+body.settings-open #settings-page { display: flex; }
+.settings-header {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.settings-header-title { font-family: var(--ui); font-weight: 600; font-size: 1rem; color: var(--text); }
+.settings-body { display: flex; flex: 1; min-height: 0; }
+.settings-nav {
+  width: 200px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 1.25rem 0.6rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
+}
+.settings-nav-item {
+  text-align: left; background: none; border: none; cursor: pointer;
+  padding: 0.6rem 0.8rem; border-radius: var(--r);
+  font-family: var(--ui); font-size: 0.92rem; font-weight: 500;
+  color: var(--text-muted);
+}
+.settings-nav-item:hover { background: var(--surface-2); color: var(--text); }
+.settings-nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.settings-content { flex: 1; overflow-y: auto; padding: 1.75rem 2rem 4rem; }
+.settings-content-inner { max-width: 620px; }
+.settings-section { display: none; flex-direction: column; gap: 1.15rem; }
+.settings-section.active { display: flex; }
+.settings-section-title { font-family: var(--ui); font-weight: 600; font-size: 1.05rem; color: var(--text); margin-bottom: 0.15rem; }
+.settings-section-desc { font-size: 0.88rem; color: var(--text-muted); margin-top: -0.65rem; }
+.settings-save-row { margin-top: 0.25rem; display: flex; align-items: center; gap: 0.75rem; }
+.settings-divider { border: none; border-top: 1px solid var(--border); margin: 0.25rem 0; }
+.name-row { display: flex; gap: 0.75rem; }
+.name-row .form-row { flex: 1; }
+
+/* ── Organizations ── */
+.org-card {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.9rem 1rem;
+}
+.org-card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.org-name { font-size: 0.98rem; font-weight: 600; color: var(--text); }
+.org-role-badge {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem; border-radius: var(--r);
+  background: var(--accent-dim); color: var(--accent);
+}
+.org-manage { display: none; flex-direction: column; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.org-manage.active { display: flex; }
+.team-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.3rem 0.6rem; font-size: 0.85rem;
+}
+
 /* ── Responsive ── */
 @media (max-width: 480px) {
   .timer-display { font-size: 2.4rem; }
   .td-title { max-width: 100px; }
   main { padding: 1rem 0.875rem; }
+  .settings-body { flex-direction: column; }
+  .settings-nav { width: auto; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); overflow-x: auto; padding: 0.6rem; }
+  .settings-content { padding: 1.25rem 1rem 3rem; }
+  .name-row { flex-direction: column; gap: 0; }
 }
 </style>
 </head>
@@ -984,7 +1052,7 @@ select.input { cursor: pointer; }
 <!-- Auth screen -->
 <div id="auth-screen">
   <div class="auth-panel">
-    <div class="auth-logo">DEVPUN.CH</div>
+    <div class="auth-logo">PUNCH</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="auth-tab-signin" data-auth-tab="signin">Sign in</button>
       <button class="auth-tab" id="auth-tab-signup" data-auth-tab="signup">Sign up</button>
@@ -1007,92 +1075,166 @@ select.input { cursor: pointer; }
   </div>
 </div>
 
-<!-- Settings modal -->
-<div id="settings-modal" class="modal-overlay hidden">
-  <div class="modal-panel">
-    <div class="modal-title">Settings</div>
-    <div class="form-row">
-      <label class="form-label" for="theme-select">Theme</label>
-      <select id="theme-select" class="input">
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </div>
-    <label class="checkbox-row">
-      <input type="checkbox" id="is-manager-checkbox">
-      I'm a manager — let me invite and monitor a team
-    </label>
-    <div class="form-row">
-      <label class="form-label" for="join-code-input">Have an invite code?</label>
-      <div style="display:flex; gap:0.4rem;">
-        <input type="text" id="join-code-input" class="input" placeholder="e.g. A1B2C3D4"
-          autocomplete="off" spellcheck="false" style="text-transform:uppercase;">
-        <button type="button" class="btn btn-ghost" id="join-team-btn">Join</button>
+<!-- Settings page -->
+<div id="settings-page">
+  <div class="settings-header">
+    <button class="icon-btn" id="settings-back-btn" title="Back to app" aria-label="Back to app">←</button>
+    <span class="settings-header-title">Settings</span>
+  </div>
+  <div class="settings-body">
+    <nav class="settings-nav">
+      <button class="settings-nav-item active" data-settings-section="general">General</button>
+      <button class="settings-nav-item" data-settings-section="account">Account</button>
+      <button class="settings-nav-item" data-settings-section="organizations">Organizations</button>
+    </nav>
+    <div class="settings-content">
+      <div class="settings-content-inner">
+
+        <!-- General -->
+        <section id="settings-section-general" class="settings-section active">
+          <div class="settings-section-title">General</div>
+          <div class="form-row">
+            <label class="form-label" for="theme-select">Theme</label>
+            <select id="theme-select" class="input">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="pat-input">Azure DevOps Personal Access Token</label>
+            <input type="password" id="pat-input" class="input"
+              placeholder="Needs Work Items (Read &amp; Write) scope"
+              autocomplete="off" spellcheck="false">
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" id="remember-pat" checked>
+            Remember PAT (synced to your account)
+          </label>
+          <div class="form-row">
+            <label class="form-label" for="week-start-select">Week starts on</label>
+            <select id="week-start-select" class="input">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="round-select">Time rounding</label>
+            <select id="round-select" class="input">
+              <option value="1">1 minute (no rounding)</option>
+              <option value="6">6 minutes (0.1h)</option>
+              <option value="15">15 minutes (0.25h)</option>
+              <option value="30">30 minutes (0.5h)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="gap-threshold-select">Gap detection threshold</label>
+            <select id="gap-threshold-select" class="input">
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="20">20 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Work hours</label>
+            <div class="work-hours-row">
+              <input type="time" id="work-start-input" class="input" style="width:auto">
+              <span class="work-hours-sep">to</span>
+              <input type="time" id="work-end-input" class="input" style="width:auto">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="notify-select">Remind me if not tracking</label>
+            <select id="notify-select" class="input">
+              <option value="0">Off</option>
+              <option value="3">Every 3 minutes</option>
+              <option value="5">Every 5 minutes</option>
+              <option value="10">Every 10 minutes</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="20">Every 20 minutes</option>
+              <option value="30">Every 30 minutes</option>
+            </select>
+          </div>
+          <div id="notify-warn" class="notify-warn hidden">⚠ Notifications blocked — allow them in browser settings.</div>
+          <div id="notify-status" class="notify-warn hidden"></div>
+          <div><button class="btn btn-ghost btn-sm" id="notify-test-btn">Send test notification</button></div>
+          <div class="settings-save-row">
+            <button class="btn btn-primary" id="general-save-btn">Save &amp; load tasks</button>
+          </div>
+        </section>
+
+        <!-- Account -->
+        <section id="settings-section-account" class="settings-section">
+          <div class="settings-section-title">Account</div>
+          <div class="name-row">
+            <div class="form-row">
+              <label class="form-label" for="first-name-input">First name</label>
+              <input type="text" id="first-name-input" class="input" autocomplete="given-name">
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="last-name-input">Last name</label>
+              <input type="text" id="last-name-input" class="input" autocomplete="family-name">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="email-input">Email</label>
+            <input type="email" id="email-input" class="input" autocomplete="email">
+            <div id="email-status" class="hidden" style="font-size:0.82rem;"></div>
+          </div>
+          <div class="settings-save-row">
+            <button class="btn btn-primary" id="account-save-btn">Save</button>
+          </div>
+
+          <hr class="settings-divider">
+          <div class="settings-section-title" style="font-size:0.95rem;">Change password</div>
+          <div class="form-row">
+            <label class="form-label" for="new-password-input">New password</label>
+            <input type="password" id="new-password-input" class="input" autocomplete="new-password">
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="confirm-password-input">Confirm new password</label>
+            <input type="password" id="confirm-password-input" class="input" autocomplete="new-password">
+          </div>
+          <div id="password-status" class="hidden" style="font-size:0.82rem;"></div>
+          <div class="settings-save-row">
+            <button class="btn btn-ghost" id="change-password-btn">Update password</button>
+          </div>
+
+          <hr class="settings-divider">
+          <label class="checkbox-row">
+            <input type="checkbox" id="is-manager-checkbox">
+            I'm a manager — let me create organizations and monitor teams
+          </label>
+        </section>
+
+        <!-- Organizations -->
+        <section id="settings-section-organizations" class="settings-section">
+          <div class="settings-section-title">Organizations</div>
+          <div class="settings-section-desc">Organizations are created by managers. Members can belong to more than one, and a manager assigns members to teams within each organization.</div>
+
+          <div class="form-row">
+            <label class="form-label" for="join-org-code-input">Have an invite code?</label>
+            <div style="display:flex; gap:0.4rem;">
+              <input type="text" id="join-org-code-input" class="input" placeholder="e.g. A1B2C3D4"
+                autocomplete="off" spellcheck="false" style="text-transform:uppercase;">
+              <button type="button" class="btn btn-ghost" id="join-org-btn">Join</button>
+            </div>
+            <div id="join-org-status" class="hidden" style="font-size:0.85rem;"></div>
+          </div>
+
+          <div id="create-org-row" class="form-row hidden">
+            <label class="form-label" for="new-org-name-input">Create an organization</label>
+            <div style="display:flex; gap:0.4rem;">
+              <input type="text" id="new-org-name-input" class="input" placeholder="Organization name" autocomplete="off">
+              <button type="button" class="btn btn-primary" id="create-org-btn">Create</button>
+            </div>
+          </div>
+
+          <div id="org-list"></div>
+        </section>
+
       </div>
-      <div id="join-team-status" class="hidden" style="font-size:0.85rem;"></div>
-    </div>
-    <div class="form-row">
-      <label class="form-label" for="pat-input">Azure DevOps Personal Access Token</label>
-      <input type="password" id="pat-input" class="input"
-        placeholder="Needs Work Items (Read &amp; Write) scope"
-        autocomplete="off" spellcheck="false">
-    </div>
-    <label class="checkbox-row">
-      <input type="checkbox" id="remember-pat" checked>
-      Remember PAT (synced to your account)
-    </label>
-    <div class="form-row">
-      <label class="form-label" for="week-start-select">Week starts on</label>
-      <select id="week-start-select" class="input">
-        <option value="0">Sunday</option>
-        <option value="1">Monday</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label class="form-label" for="round-select">Time rounding</label>
-      <select id="round-select" class="input">
-        <option value="1">1 minute (no rounding)</option>
-        <option value="6">6 minutes (0.1h)</option>
-        <option value="15">15 minutes (0.25h)</option>
-        <option value="30">30 minutes (0.5h)</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label class="form-label" for="gap-threshold-select">Gap detection threshold</label>
-      <select id="gap-threshold-select" class="input">
-        <option value="5">5 minutes</option>
-        <option value="10">10 minutes</option>
-        <option value="15">15 minutes</option>
-        <option value="20">20 minutes</option>
-        <option value="30">30 minutes</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label class="form-label">Work hours</label>
-      <div class="work-hours-row">
-        <input type="time" id="work-start-input" class="input" style="width:auto">
-        <span class="work-hours-sep">to</span>
-        <input type="time" id="work-end-input" class="input" style="width:auto">
-      </div>
-    </div>
-    <div class="form-row">
-      <label class="form-label" for="notify-select">Remind me if not tracking</label>
-      <select id="notify-select" class="input">
-        <option value="0">Off</option>
-        <option value="3">Every 3 minutes</option>
-        <option value="5">Every 5 minutes</option>
-        <option value="10">Every 10 minutes</option>
-        <option value="15">Every 15 minutes</option>
-        <option value="20">Every 20 minutes</option>
-        <option value="30">Every 30 minutes</option>
-      </select>
-    </div>
-    <div id="notify-warn" class="notify-warn hidden">⚠ Notifications blocked — allow them in browser settings.</div>
-    <div id="notify-status" class="notify-warn hidden"></div>
-    <div style="margin-top:0.5rem"><button class="btn btn-ghost btn-sm" id="notify-test-btn">Send test notification</button></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="settings-cancel">Cancel</button>
-      <button class="btn btn-primary" id="settings-save">Save &amp; load tasks</button>
     </div>
   </div>
 </div>
@@ -1115,7 +1257,7 @@ select.input { cursor: pointer; }
 
 <!-- Header -->
 <header class="app-shell">
-  <span class="app-name">DEVPUN.CH</span>
+  <span class="app-name">PUNCH</span>
   <div class="header-right">
     <span class="sync-label" id="sync-label"></span>
     <span class="user-email-label" id="user-email-label"></span>
@@ -1130,7 +1272,6 @@ select.input { cursor: pointer; }
   <button class="tab-btn active" data-tab="timer">Timer</button>
   <button class="tab-btn" data-tab="retro">Retro</button>
   <button class="tab-btn" data-tab="todo">TODO</button>
-  <button class="tab-btn hidden" data-tab="team" id="team-tab-btn">Team</button>
 </div>
 
 <main class="app-shell">
@@ -1310,23 +1451,6 @@ select.input { cursor: pointer; }
   </div>
 </div><!-- /tab-todo -->
 
-<div id="tab-team" class="tab-panel">
-  <div class="section-card">
-    <div class="section-eyebrow">Invite a team member</div>
-    <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
-      <button class="btn btn-primary btn-sm" id="create-invite-btn">Generate invite code</button>
-      <span style="font-size:0.85rem; color:var(--text-muted);">Each code works once and expires in 14 days.</span>
-    </div>
-    <div id="new-invite-box" class="invite-box hidden" style="margin-top:0.85rem;"></div>
-    <ul class="invite-list" id="invites-list"></ul>
-  </div>
-
-  <div class="section-card" style="margin-top:1.25rem;">
-    <div class="section-eyebrow">Team<span class="team-live-dot" id="team-live-dot" title="Live updates on"></span></div>
-    <ul class="roster-list" id="team-roster"></ul>
-  </div>
-</div><!-- /tab-team -->
-
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -1388,11 +1512,8 @@ select.input { cursor: pointer; }
   // ── DOM ──────────────────────────────────────────────────
   function $  (id) { return document.getElementById(id); }
 
-  const settingsModal = $('settings-modal');
   const patInput      = $('pat-input');
   const rememberPat   = $('remember-pat');
-  const settingsSave  = $('settings-save');
-  const settingsCancel= $('settings-cancel');
   const settingsBtn   = $('settings-btn');
   const configureBtn  = $('configure-btn');
   const refreshBtn    = $('refresh-btn');
@@ -1446,15 +1567,25 @@ select.input { cursor: pointer; }
   const weekStartSelect = $('week-start-select');
   const themeSelect     = $('theme-select');
   const isManagerCheckbox = $('is-manager-checkbox');
-  const joinCodeInput   = $('join-code-input');
-  const joinTeamBtn     = $('join-team-btn');
-  const joinTeamStatus  = $('join-team-status');
-  const teamTabBtn      = $('team-tab-btn');
-  const createInviteBtn = $('create-invite-btn');
-  const newInviteBox    = $('new-invite-box');
-  const invitesList     = $('invites-list');
-  const teamRoster       = $('team-roster');
-  const teamLiveDot      = $('team-live-dot');
+  const settingsPage       = $('settings-page');
+  const settingsBackBtn    = $('settings-back-btn');
+  const generalSaveBtn     = $('general-save-btn');
+  const accountSaveBtn     = $('account-save-btn');
+  const firstNameInput     = $('first-name-input');
+  const lastNameInput      = $('last-name-input');
+  const emailInput         = $('email-input');
+  const emailStatus        = $('email-status');
+  const newPasswordInput   = $('new-password-input');
+  const confirmPasswordInput = $('confirm-password-input');
+  const passwordStatus     = $('password-status');
+  const changePasswordBtn  = $('change-password-btn');
+  const joinOrgCodeInput   = $('join-org-code-input');
+  const joinOrgBtn         = $('join-org-btn');
+  const joinOrgStatus      = $('join-org-status');
+  const createOrgRow       = $('create-org-row');
+  const newOrgNameInput    = $('new-org-name-input');
+  const createOrgBtn       = $('create-org-btn');
+  const orgList            = $('org-list');
   const roundSelect          = $('round-select');
   const gapThresholdSelect   = $('gap-threshold-select');
   const workStartInput  = $('work-start-input');
@@ -1611,7 +1742,6 @@ select.input { cursor: pointer; }
         localStorage.setItem(K.THEME, JSON.stringify(s.theme || 'light'));
         applyTheme(s.theme || 'light');
         localStorage.setItem(K.IS_MANAGER, JSON.stringify(!!s.is_manager));
-        updateTeamTabVisibility();
         const pat = patRes && !patRes.error ? patRes.data : null;
         if (s.remember_pat && pat) localStorage.setItem(K.PAT, JSON.stringify(pat));
         else localStorage.removeItem(K.PAT);
@@ -2873,13 +3003,10 @@ select.input { cursor: pointer; }
   }
 
   // ── Settings ─────────────────────────────────────────────
-  function openSettings() {
+  function showSettingsPage(section) {
     patInput.value = getPat() || '';
     rememberPat.checked = !!getPat();
     themeSelect.value = load(K.THEME, 'light');
-    isManagerCheckbox.checked = load(K.IS_MANAGER, false);
-    joinCodeInput.value = '';
-    joinTeamStatus.classList.add('hidden');
     weekStartSelect.value = String(load(K.WEEK_START, 0));
     roundSelect.value         = String(load(K.ROUND_INCREMENT, 30));
     gapThresholdSelect.value  = String(load(K.GAP_THRESHOLD, 15));
@@ -2894,14 +3021,38 @@ select.input { cursor: pointer; }
     const perm = Notification.permission;
     notifyStatus.textContent = `Notification permission: ${perm}`;
     notifyStatus.classList.remove('hidden');
-    settingsModal.classList.remove('hidden');
-    setTimeout(() => patInput.focus(), 50);
+
+    isManagerCheckbox.checked = load(K.IS_MANAGER, false);
+    createOrgRow.classList.toggle('hidden', !isManagerCheckbox.checked);
+    emailInput.value = currentUser ? (currentUser.email || '') : '';
+    emailStatus.classList.add('hidden');
+    newPasswordInput.value = '';
+    confirmPasswordInput.value = '';
+    passwordStatus.classList.add('hidden');
+    joinOrgCodeInput.value = '';
+    joinOrgStatus.classList.add('hidden');
+    loadOwnProfileIntoAccountForm();
+
+    document.body.classList.add('settings-open');
+    switchSettingsSection(section || 'general');
+    if (!section || section === 'organizations') renderOrgList();
   }
-  function closeSettings() { settingsModal.classList.add('hidden'); }
-  async function saveSettings() {
+  function hideSettingsPage() {
+    document.body.classList.remove('settings-open');
+    stopOrgLiveUpdates();
+  }
+  function switchSettingsSection(name) {
+    document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.toggle('active', b.dataset.settingsSection === name));
+    document.querySelectorAll('.settings-section').forEach(s => s.classList.toggle('active', s.id === 'settings-section-' + name));
+    if (name === 'organizations') { renderOrgList(); startOrgLiveUpdates(); }
+    else stopOrgLiveUpdates();
+  }
+  document.querySelectorAll('.settings-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => switchSettingsSection(btn.dataset.settingsSection));
+  });
+
+  async function saveGeneralSettings() {
     const pat = patInput.value.trim();
-    save(K.IS_MANAGER, isManagerCheckbox.checked);
-    updateTeamTabVisibility();
     save(K.WEEK_START, Number(weekStartSelect.value));
     save(K.ROUND_INCREMENT, Number(roundSelect.value));
     save(K.GAP_THRESHOLD, Number(gapThresholdSelect.value));
@@ -2917,19 +3068,22 @@ select.input { cursor: pointer; }
       await Notification.requestPermission();
     }
     setupNotifyTimer();
-    closeSettings();
     renderLog();
     if (pat) await loadTasks(true);
+    toast('Settings saved.', 'success');
   }
 
   // ── Events ───────────────────────────────────────────────
-  settingsBtn.addEventListener('click', openSettings);
-  configureBtn.addEventListener('click', openSettings);
-  settingsSave.addEventListener('click', saveSettings);
-  settingsCancel.addEventListener('click', closeSettings);
+  settingsBtn.addEventListener('click', () => showSettingsPage('general'));
+  configureBtn.addEventListener('click', () => showSettingsPage('general'));
+  settingsBackBtn.addEventListener('click', hideSettingsPage);
+  generalSaveBtn.addEventListener('click', saveGeneralSettings);
   themeSelect.addEventListener('change', () => {
     applyTheme(themeSelect.value);
     save(K.THEME, themeSelect.value);
+  });
+  isManagerCheckbox.addEventListener('change', () => {
+    createOrgRow.classList.toggle('hidden', !isManagerCheckbox.checked);
   });
   notifyTestBtn.addEventListener('click', async () => {
     if (Notification.permission === 'default') await Notification.requestPermission();
@@ -2940,8 +3094,7 @@ select.input { cursor: pointer; }
       notifyStatus.textContent = `Notification permission: ${Notification.permission} — check browser site settings`;
     }
   });
-  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) closeSettings(); });
-  patInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveSettings(); if (e.key === 'Escape') closeSettings(); });
+  patInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveGeneralSettings(); });
 
   refreshBtn.addEventListener('click', () => loadTasks(true));
   weekPrev.addEventListener('click', () => { weekOffset--; renderLog(); });
@@ -3081,29 +3234,81 @@ select.input { cursor: pointer; }
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       $('tab-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'team') {
-        renderInvites();
-        renderTeam();
-        startTeamLiveUpdates();
-      } else {
-        stopTeamLiveUpdates();
-      }
     });
   });
 
-  // ── Team & invites ───────────────────────────────────────
-  function updateTeamTabVisibility() {
-    const isManager = load(K.IS_MANAGER, false);
-    teamTabBtn.classList.toggle('hidden', !isManager);
-    if (!isManager && teamTabBtn.classList.contains('active')) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelector('.tab-btn[data-tab="timer"]').classList.add('active');
-      $('tab-timer').classList.add('active');
-      stopTeamLiveUpdates();
-    }
+  // ── Account (profile, email, password) ────────────────────
+  async function loadOwnProfileIntoAccountForm() {
+    if (!currentUser) return;
+    firstNameInput.value = '';
+    lastNameInput.value = '';
+    try {
+      const { data, error } = await sb.from('profiles').select('first_name, last_name').eq('id', currentUser.id).maybeSingle();
+      if (!error && data) {
+        firstNameInput.value = data.first_name || '';
+        lastNameInput.value = data.last_name || '';
+      }
+    } catch (err) { console.warn('load profile failed', err); }
   }
 
+  accountSaveBtn.addEventListener('click', async () => {
+    if (!currentUser) return;
+    accountSaveBtn.disabled = true;
+    save(K.IS_MANAGER, isManagerCheckbox.checked);
+    try {
+      unwrap(await sb.from('profiles').upsert({
+        id: currentUser.id,
+        first_name: firstNameInput.value.trim() || null,
+        last_name: lastNameInput.value.trim() || null,
+      }));
+
+      const newEmail = emailInput.value.trim();
+      if (newEmail && newEmail !== currentUser.email) {
+        const { error } = await sb.auth.updateUser({ email: newEmail });
+        if (error) throw error;
+        emailStatus.classList.remove('hidden');
+        emailStatus.style.color = 'var(--text-muted)';
+        emailStatus.textContent = 'Check your inbox to confirm the new email address.';
+      }
+      toast('Account saved.', 'success');
+    } catch (err) {
+      toast(err.message || 'Could not save account.', 'error');
+    } finally {
+      accountSaveBtn.disabled = false;
+    }
+  });
+
+  changePasswordBtn.addEventListener('click', async () => {
+    const pw = newPasswordInput.value;
+    const confirm = confirmPasswordInput.value;
+    passwordStatus.classList.remove('hidden');
+    if (!pw || pw.length < 6) {
+      passwordStatus.style.color = 'var(--red)';
+      passwordStatus.textContent = 'Password must be at least 6 characters.';
+      return;
+    }
+    if (pw !== confirm) {
+      passwordStatus.style.color = 'var(--red)';
+      passwordStatus.textContent = 'Passwords do not match.';
+      return;
+    }
+    changePasswordBtn.disabled = true;
+    try {
+      const { error } = await sb.auth.updateUser({ password: pw });
+      if (error) throw error;
+      passwordStatus.style.color = 'var(--green)';
+      passwordStatus.textContent = 'Password updated.';
+      newPasswordInput.value = '';
+      confirmPasswordInput.value = '';
+    } catch (err) {
+      passwordStatus.style.color = 'var(--red)';
+      passwordStatus.textContent = err.message || 'Could not update password.';
+    } finally {
+      changePasswordBtn.disabled = false;
+    }
+  });
+
+  // ── Organizations ────────────────────────────────────────
   function generateInviteCode() {
     if (window.crypto && crypto.randomUUID) {
       return crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -3111,95 +3316,46 @@ select.input { cursor: pointer; }
     return Math.random().toString(36).slice(2, 10).toUpperCase();
   }
 
-  createInviteBtn.addEventListener('click', async () => {
-    if (!currentUser) return;
-    createInviteBtn.disabled = true;
+  joinOrgBtn.addEventListener('click', async () => {
+    const code = joinOrgCodeInput.value.trim().toUpperCase();
+    if (!code) return;
+    joinOrgStatus.classList.remove('hidden');
+    joinOrgStatus.style.color = 'var(--text-muted)';
+    joinOrgStatus.textContent = 'Joining…';
+    joinOrgBtn.disabled = true;
     try {
-      let lastErr = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const code = generateInviteCode();
-        const { error } = await sb.from('invites').insert({ code, manager_id: currentUser.id });
-        if (!error) {
-          newInviteBox.classList.remove('hidden');
-          newInviteBox.innerHTML = `
-            <span class="invite-code">${esc(code)}</span>
-            <button class="btn btn-ghost btn-sm" id="copy-invite-btn">Copy</button>
-            <span style="font-size:0.8rem;color:var(--text-muted);">Expires in 14 days</span>
-          `;
-          $('copy-invite-btn').addEventListener('click', async () => {
-            try { await navigator.clipboard.writeText(code); toast('Invite code copied.', 'success'); }
-            catch { toast('Could not copy — select and copy manually.', 'error'); }
-          });
-          await renderInvites();
-          lastErr = null;
-          break;
-        }
-        lastErr = error;
-      }
-      if (lastErr) throw lastErr;
+      const { data, error } = await sb.rpc('redeem_org_invite', { p_code: code });
+      if (error) throw error;
+      const orgName = data && data[0] && data[0].org_name;
+      joinOrgStatus.style.color = 'var(--green)';
+      joinOrgStatus.textContent = orgName ? `You've joined ${orgName}.` : `You've joined the organization.`;
+      joinOrgCodeInput.value = '';
+      toast('Joined organization.', 'success');
+      renderOrgList();
     } catch (err) {
-      toast('Could not create invite code.', 'error');
-      console.warn('create invite failed', err);
+      joinOrgStatus.style.color = 'var(--red)';
+      joinOrgStatus.textContent = err.message || 'Could not redeem that code.';
     } finally {
-      createInviteBtn.disabled = false;
+      joinOrgBtn.disabled = false;
     }
   });
 
-  async function renderInvites() {
-    if (!currentUser) return;
-    const { data, error } = await sb.from('invites')
-      .select('*')
-      .eq('manager_id', currentUser.id)
-      .is('used_at', null)
-      .gte('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false });
-    if (error) { console.warn('load invites failed', error); return; }
-    if (!data || !data.length) {
-      invitesList.innerHTML = '<li class="team-empty">No pending invites.</li>';
-      return;
-    }
-    invitesList.innerHTML = data.map(inv => `
-      <li class="invite-row">
-        <span class="invite-row-code">${esc(inv.code)}</span>
-        <span class="invite-row-meta">Expires ${new Date(inv.expires_at).toLocaleDateString()}</span>
-        <button class="btn btn-ghost btn-sm" data-revoke-id="${esc(inv.id)}">Revoke</button>
-      </li>
-    `).join('');
-    invitesList.querySelectorAll('[data-revoke-id]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        const { error } = await sb.from('invites').delete().eq('id', btn.dataset.revokeId);
-        if (error) { toast('Could not revoke invite.', 'error'); btn.disabled = false; return; }
-        await renderInvites();
-      });
-    });
-  }
-
-  joinTeamBtn.addEventListener('click', () => redeemInviteCode(joinCodeInput.value.trim()));
-
-  async function redeemInviteCode(code) {
-    if (!code) return;
-    joinTeamStatus.classList.remove('hidden');
-    joinTeamStatus.style.color = 'var(--text-muted)';
-    joinTeamStatus.textContent = 'Joining…';
-    joinTeamBtn.disabled = true;
+  createOrgBtn.addEventListener('click', async () => {
+    const name = newOrgNameInput.value.trim();
+    if (!name || !currentUser) return;
+    createOrgBtn.disabled = true;
     try {
-      const { data, error } = await sb.rpc('redeem_invite', { p_code: code.toUpperCase() });
+      const { error } = await sb.from('organizations').insert({ name, owner_id: currentUser.id });
       if (error) throw error;
-      const managerEmail = data && data[0] && data[0].manager_email;
-      joinTeamStatus.style.color = 'var(--green)';
-      joinTeamStatus.textContent = managerEmail
-        ? `You've joined ${managerEmail}'s team.`
-        : `You've joined the team.`;
-      joinCodeInput.value = '';
-      toast('Joined team.', 'success');
+      newOrgNameInput.value = '';
+      toast('Organization created.', 'success');
+      renderOrgList();
     } catch (err) {
-      joinTeamStatus.style.color = 'var(--red)';
-      joinTeamStatus.textContent = err.message || 'Could not redeem that code.';
+      toast(err.message || 'Could not create organization.', 'error');
     } finally {
-      joinTeamBtn.disabled = false;
+      createOrgBtn.disabled = false;
     }
-  }
+  });
 
   function fmtElapsed(startMs) {
     const mins = Math.max(0, Math.floor((Date.now() - startMs) / 60000));
@@ -3207,65 +3363,225 @@ select.input { cursor: pointer; }
     return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   }
 
-  async function renderTeam() {
+  async function renderOrgList() {
     if (!currentUser) return;
-    const { data: members, error: memErr } = await sb.from('team_members').select('member_id').eq('manager_id', currentUser.id);
-    if (memErr) { console.warn('load team failed', memErr); return; }
-    const memberIds = (members || []).map(m => m.member_id);
-    if (!memberIds.length) {
-      teamRoster.innerHTML = '<li class="team-empty">No team members yet — generate an invite code above.</li>';
+    const { data: orgs, error } = await sb.from('organizations').select('*').order('created_at', { ascending: true });
+    if (error) { console.warn('load orgs failed', error); return; }
+    if (!orgs || !orgs.length) {
+      orgList.innerHTML = '<div class="team-empty">Not part of any organization yet.</div>';
       return;
     }
 
-    const [{ data: profiles }, { data: activeRows }, { data: todayRows }] = await Promise.all([
-      sb.from('profiles').select('id, email').in('id', memberIds),
-      sb.from('active_timer').select('*').in('user_id', memberIds),
-      sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
-    ]);
+    orgList.innerHTML = orgs.map(org => `
+      <div class="org-card" style="margin-top:0.85rem;" data-org-id="${esc(org.id)}">
+        <div class="org-card-header">
+          <span class="org-name">${esc(org.name)}</span>
+          <span class="org-role-badge">${org.owner_id === currentUser.id ? 'Owner' : 'Member'}</span>
+        </div>
+        <div class="org-member-status" style="font-size:0.85rem;color:var(--text-muted);margin-top:0.3rem;"></div>
+        <div class="org-manage active"></div>
+      </div>
+    `).join('');
 
-    const emailById = {};
-    (profiles || []).forEach(p => { emailById[p.id] = p.email || '(no email on file)'; });
+    for (const org of orgs) {
+      const card = orgList.querySelector(`[data-org-id="${CSS.escape(org.id)}"]`);
+      if (!card) continue;
+      if (org.owner_id === currentUser.id) {
+        await renderOrgManagePanel(org, card.querySelector('.org-manage'));
+      } else {
+        const { data: tm } = await sb.from('team_members').select('team_id').eq('org_id', org.id).eq('user_id', currentUser.id).maybeSingle();
+        let teamName = 'Unassigned';
+        if (tm) {
+          const { data: team } = await sb.from('teams').select('name').eq('id', tm.team_id).maybeSingle();
+          if (team) teamName = team.name;
+        }
+        card.querySelector('.org-member-status').textContent = `Your team: ${teamName}`;
+      }
+    }
+  }
+
+  async function renderOrgManagePanel(org, container) {
+    const [{ data: invites }, { data: teams }, { data: members }] = await Promise.all([
+      sb.from('org_invites').select('*').eq('org_id', org.id).is('used_at', null).gte('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
+      sb.from('teams').select('*').eq('org_id', org.id).order('created_at', { ascending: true }),
+      sb.from('org_members').select('user_id').eq('org_id', org.id),
+    ]);
+    const memberIds = (members || []).map(m => m.user_id);
+
+    const [{ data: profiles }, { data: assignments }, { data: activeRows }, { data: todayRows }] = memberIds.length
+      ? await Promise.all([
+          sb.from('profiles').select('id, email, first_name, last_name').in('id', memberIds),
+          sb.from('team_members').select('user_id, team_id').eq('org_id', org.id),
+          sb.from('active_timer').select('*').in('user_id', memberIds),
+          sb.from('log_entries').select('user_id, duration').eq('date', todayKey()).in('user_id', memberIds),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+
+    const profileById = {};
+    (profiles || []).forEach(p => { profileById[p.id] = p; });
+    const teamIdByUser = {};
+    (assignments || []).forEach(a => { teamIdByUser[a.user_id] = a.team_id; });
     const activeById = {};
     (activeRows || []).forEach(a => { activeById[a.user_id] = a; });
     const totalById = {};
     (todayRows || []).forEach(r => { totalById[r.user_id] = (totalById[r.user_id] || 0) + (r.duration || 0); });
 
-    teamRoster.innerHTML = memberIds.map(id => {
-      const email = emailById[id] || id;
-      const initial = (email[0] || '?').toUpperCase();
-      const active = activeById[id];
-      const todayMs = totalById[id] || 0;
-      const todayStr = fmtHM(todayMs);
-      const statusHtml = active
-        ? `<div class="roster-status working">Working on ${active.task_id ? '#' + esc(active.task_id) + ' — ' : ''}${esc(active.task_title || 'untitled')} (${fmtElapsed(active.start_time)})</div>`
-        : `<div class="roster-status">Idle</div>`;
-      return `
-        <li class="roster-row">
-          <div class="roster-avatar">${esc(initial)}</div>
-          <div class="roster-body">
-            <div class="roster-email">${esc(email)}</div>
-            ${statusHtml}
-          </div>
-          <div class="roster-today">Today<br>${esc(todayStr)}</div>
+    const teamOptionsHtml = ['<option value="">Unassigned</option>']
+      .concat((teams || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`)).join('');
+
+    container.innerHTML = `
+      <div>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Invite</div>
+        <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm org-create-invite-btn">Generate invite code</button>
+          <span style="font-size:0.8rem; color:var(--text-muted);">Works once, expires in 14 days.</span>
+        </div>
+        <div class="invite-box hidden org-new-invite-box" style="margin-top:0.6rem;"></div>
+        <ul class="invite-list org-invites-list"></ul>
+      </div>
+      <div>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Teams</div>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+          ${(teams || []).map(t => `<span class="team-chip">${esc(t.name)}</span>`).join('') || '<span style="font-size:0.85rem;color:var(--text-muted);">No teams yet.</span>'}
+        </div>
+        <div style="display:flex; gap:0.4rem;">
+          <input type="text" class="input org-new-team-input" placeholder="New team name" autocomplete="off" style="max-width:220px;">
+          <button class="btn btn-ghost btn-sm org-add-team-btn">Add team</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Roster<span class="team-live-dot"></span></div>
+        <ul class="roster-list org-roster-list"></ul>
+      </div>
+    `;
+
+    const invitesListEl = container.querySelector('.org-invites-list');
+    function renderInvitesInto(list) {
+      const rows = list || invites;
+      if (!rows || !rows.length) {
+        invitesListEl.innerHTML = '<li class="team-empty">No pending invites.</li>';
+        return;
+      }
+      invitesListEl.innerHTML = rows.map(inv => `
+        <li class="invite-row">
+          <span class="invite-row-code">${esc(inv.code)}</span>
+          <span class="invite-row-meta">Expires ${new Date(inv.expires_at).toLocaleDateString()}</span>
+          <button class="btn btn-ghost btn-sm" data-revoke-id="${esc(inv.id)}">Revoke</button>
         </li>
-      `;
-    }).join('');
+      `).join('');
+      invitesListEl.querySelectorAll('[data-revoke-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const { error } = await sb.from('org_invites').delete().eq('id', btn.dataset.revokeId);
+          if (error) { toast('Could not revoke invite.', 'error'); btn.disabled = false; return; }
+          await refreshInvitesList();
+        });
+      });
+    }
+    renderInvitesInto();
+
+    async function refreshInvitesList() {
+      const { data } = await sb.from('org_invites').select('*').eq('org_id', org.id).is('used_at', null).gte('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
+      renderInvitesInto(data);
+    }
+
+    container.querySelector('.org-create-invite-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const newInviteBox = container.querySelector('.org-new-invite-box');
+      try {
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const code = generateInviteCode();
+          const { error } = await sb.from('org_invites').insert({ code, org_id: org.id, created_by: currentUser.id });
+          if (!error) {
+            newInviteBox.classList.remove('hidden');
+            newInviteBox.innerHTML = `
+              <span class="invite-code">${esc(code)}</span>
+              <button class="btn btn-ghost btn-sm org-copy-invite-btn">Copy</button>
+              <span style="font-size:0.8rem;color:var(--text-muted);">Expires in 14 days</span>
+            `;
+            newInviteBox.querySelector('.org-copy-invite-btn').addEventListener('click', async () => {
+              try { await navigator.clipboard.writeText(code); toast('Invite code copied.', 'success'); }
+              catch { toast('Could not copy — select and copy manually.', 'error'); }
+            });
+            lastErr = null;
+            break;
+          }
+          lastErr = error;
+        }
+        if (lastErr) throw lastErr;
+        await refreshInvitesList();
+      } catch (err) {
+        toast('Could not create invite code.', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    container.querySelector('.org-add-team-btn').addEventListener('click', async (e) => {
+      const input = container.querySelector('.org-new-team-input');
+      const name = input.value.trim();
+      if (!name) return;
+      e.currentTarget.disabled = true;
+      const { error } = await sb.from('teams').insert({ org_id: org.id, name });
+      if (error) toast('Could not add team.', 'error');
+      else { input.value = ''; renderOrgList(); }
+      e.currentTarget.disabled = false;
+    });
+
+    const rosterEl = container.querySelector('.org-roster-list');
+    if (!memberIds.length) {
+      rosterEl.innerHTML = '<li class="team-empty">No members yet — generate an invite code above.</li>';
+    } else {
+      rosterEl.innerHTML = memberIds.map(id => {
+        const p = profileById[id] || {};
+        const displayName = (p.first_name || p.last_name) ? `${p.first_name || ''} ${p.last_name || ''}`.trim() : (p.email || id);
+        const initial = (displayName[0] || '?').toUpperCase();
+        const active = activeById[id];
+        const todayStr = fmtHM(totalById[id] || 0);
+        const statusHtml = active
+          ? `<div class="roster-status working">Working on ${active.task_id ? '#' + esc(active.task_id) + ' — ' : ''}${esc(active.task_title || 'untitled')} (${fmtElapsed(active.start_time)})</div>`
+          : `<div class="roster-status">Idle</div>`;
+        return `
+          <li class="roster-row">
+            <div class="roster-avatar">${esc(initial)}</div>
+            <div class="roster-body">
+              <div class="roster-email">${esc(displayName)}</div>
+              ${statusHtml}
+            </div>
+            <select class="input org-team-assign" data-user-id="${esc(id)}" style="width:auto;">${teamOptionsHtml}</select>
+            <div class="roster-today">Today<br>${esc(todayStr)}</div>
+          </li>
+        `;
+      }).join('');
+      rosterEl.querySelectorAll('.org-team-assign').forEach(sel => {
+        sel.value = teamIdByUser[sel.dataset.userId] || '';
+        sel.addEventListener('change', async () => {
+          sel.disabled = true;
+          const teamId = sel.value || null;
+          const { error } = await sb.from('team_members').upsert({ org_id: org.id, user_id: sel.dataset.userId, team_id: teamId });
+          if (error) toast('Could not assign team.', 'error');
+          sel.disabled = false;
+        });
+      });
+    }
   }
 
-  let teamChannel = null;
-  let teamPollTimer = null;
-  function startTeamLiveUpdates() {
-    stopTeamLiveUpdates();
-    teamPollTimer = setInterval(renderTeam, 15000);
+  let orgChannel = null;
+  let orgPollTimer = null;
+  function startOrgLiveUpdates() {
+    stopOrgLiveUpdates();
+    orgPollTimer = setInterval(renderOrgList, 15000);
     try {
-      teamChannel = sb.channel('team-active-timer')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, () => renderTeam())
+      orgChannel = sb.channel('org-active-timer')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'active_timer' }, () => renderOrgList())
         .subscribe();
     } catch (err) { console.warn('realtime subscribe failed', err); }
   }
-  function stopTeamLiveUpdates() {
-    if (teamPollTimer) { clearInterval(teamPollTimer); teamPollTimer = null; }
-    if (teamChannel) { sb.removeChannel(teamChannel); teamChannel = null; }
+  function stopOrgLiveUpdates() {
+    if (orgPollTimer) { clearInterval(orgPollTimer); orgPollTimer = null; }
+    if (orgChannel) { sb.removeChannel(orgChannel); orgChannel = null; }
   }
 
   // ── Retro ────────────────────────────────────────────────
@@ -3275,6 +3591,7 @@ select.input { cursor: pointer; }
     { key: 'action',   inputId: 'retro-action-input',   listId: 'retro-action-list' },
     { key: 'shoutout', inputId: 'retro-shoutout-input', listId: 'retro-shoutout-list' },
   ];
+
 
   function renderRetro() {
     const items = load(K.RETRO, []);
@@ -3614,7 +3931,7 @@ select.input { cursor: pointer; }
   });
 
   signoutBtn.addEventListener('click', async () => {
-    if (!confirm('Sign out of Devpun.ch?')) return;
+    if (!confirm('Sign out of Punch?')) return;
     await sb.auth.signOut();
   });
 
@@ -3627,13 +3944,13 @@ select.input { cursor: pointer; }
     appStarted = true;
     document.body.classList.remove('pre-auth');
     userEmailLabel.textContent = currentUser.email || '';
-    updateTeamTabVisibility();
     init();
     const urlInvite = new URLSearchParams(location.search).get('invite');
     if (urlInvite) {
       history.replaceState(null, '', location.pathname + location.hash);
-      await redeemInviteCode(urlInvite.trim());
-      openSettings();
+      showSettingsPage('organizations');
+      joinOrgCodeInput.value = urlInvite.trim().toUpperCase();
+      joinOrgBtn.click();
     }
   }
 
@@ -3650,7 +3967,7 @@ select.input { cursor: pointer; }
     } else {
       currentUser = null;
       appStarted = false;
-      stopTeamLiveUpdates();
+      stopOrgLiveUpdates();
       suppressSync = true;
       clearLocalAppData();
       suppressSync = false;
