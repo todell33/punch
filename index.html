@@ -1416,10 +1416,10 @@ select.input { cursor: pointer; }
         work_start: load(K.WORK_START, ''),
         work_end: load(K.WORK_END, ''),
         notify_interval: load(K.NOTIFY_INTERVAL, 0),
-        ado_pat: pat || null,
-        remember_pat: !!pat,
         updated_at: new Date().toISOString(),
       });
+      // PAT is stored as an encrypted Vault secret via RPC, never in this table directly
+      await sb.rpc('set_ado_pat', { p_pat: pat || '' });
     } catch (err) { console.warn('settings sync failed', err); }
   }
 
@@ -1427,12 +1427,13 @@ select.input { cursor: pointer; }
     suppressSync = true;
     const uid = currentUser.id;
     try {
-      const [settingsRes, activeRes, logRes, retroRes, todoRes] = await Promise.all([
+      const [settingsRes, activeRes, logRes, retroRes, todoRes, patRes] = await Promise.all([
         sb.from('settings').select('*').eq('user_id', uid).maybeSingle(),
         sb.from('active_timer').select('*').eq('user_id', uid).maybeSingle(),
         sb.from('log_entries').select('*').eq('user_id', uid).order('start_time', { ascending: true }),
         sb.from('retro_items').select('*').eq('user_id', uid),
         sb.from('todo_items').select('*').eq('user_id', uid),
+        sb.rpc('get_ado_pat'),
       ]);
 
       const s = settingsRes.data;
@@ -1443,7 +1444,8 @@ select.input { cursor: pointer; }
         localStorage.setItem(K.WORK_START, JSON.stringify(s.work_start ?? ''));
         localStorage.setItem(K.WORK_END, JSON.stringify(s.work_end ?? ''));
         localStorage.setItem(K.NOTIFY_INTERVAL, JSON.stringify(s.notify_interval ?? 0));
-        if (s.remember_pat && s.ado_pat) localStorage.setItem(K.PAT, JSON.stringify(s.ado_pat));
+        const pat = patRes && !patRes.error ? patRes.data : null;
+        if (s.remember_pat && pat) localStorage.setItem(K.PAT, JSON.stringify(pat));
         else localStorage.removeItem(K.PAT);
       }
 
