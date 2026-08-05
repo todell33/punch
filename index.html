@@ -5,22 +5,72 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Punch</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱</text></svg>">
+<script>
+  // Applied before first paint so switching to dark mode doesn't flash light first.
+  try {
+    var t = JSON.parse(localStorage.getItem('punch_theme'));
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  } catch (e) {}
+</script>
 <style>
 :root {
-  --ground:      #15181C;
-  --surface:     #1E2228;
-  --surface-2:   #252B33;
-  --border:      #2C3340;
-  --text:        #E1E4DF;
-  --text-muted:  #6B7480;
-  --accent:      #F4670A;
-  --accent-dim:  rgba(244,103,10,0.11);
-  --blue:        #4A90B8;
-  --green:       #52A87A;
-  --red:         #D95050;
-  --mono:        ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
-  --ui:          system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --r:           4px;
+  /* Light theme — Microsoft Azure DevOps default palette */
+  --ground:        #FAF9F8;
+  --surface:       #FFFFFF;
+  --surface-2:     #F3F2F1;
+  --surface-3:     #EDEBE9;
+  --border:        #E1DFDD;
+  --border-rgb:    225,223,221;
+  --border-strong: #C8C6C4;
+  --text:          #201F1E;
+  --text-muted:    #605E5C;
+  --accent:        #0078D4;
+  --accent-rgb:    0,120,212;
+  --accent-dim:    rgba(0,120,212,0.08);
+  --blue:          #0078D4;
+  --blue-rgb:      0,120,212;
+  --blue-hover:    #106EBE;
+  --green:         #107C10;
+  --green-rgb:     16,124,16;
+  --red:           #D13438;
+  --red-rgb:       209,52,56;
+  --amber:         #C19C00;
+  --shadow-sm:     0 1px 2px rgba(0,0,0,0.08);
+  --shadow-lg:     0 6.4px 14.4px rgba(0,0,0,0.13), 0 1.2px 3.6px rgba(0,0,0,0.11);
+  --overlay-bg:    rgba(0,0,0,0.4);
+  --mono:          ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, Menlo, monospace;
+  --ui:            'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif;
+  --r:             2px;
+}
+
+[data-theme="dark"] {
+  /* Dark theme — sourced from Azure DevOps' real dark-theme design tokens */
+  --ground:        #1B1A19;
+  --surface:       #292827;
+  --surface-2:     #323130;
+  --surface-3:     #3B3A39;
+  --border:        #3B3A39;
+  --border-rgb:    59,58,57;
+  --border-strong: #484644;
+  --text:          rgba(255,255,255,0.95);
+  --text-muted:    rgba(255,255,255,0.7);
+  --accent:        #79B5FF;
+  --accent-rgb:    121,181,255;
+  --accent-dim:    rgba(0,120,212,0.2);
+  --blue:          #0078D4;
+  --blue-rgb:      0,120,212;
+  --blue-hover:    #1B88D6;
+  --green:         #92C353;
+  --green-rgb:     146,195,83;
+  --red:           #F1707B;
+  --red-rgb:       241,112,123;
+  --amber:         #FDB913;
+  --shadow-sm:     0 1px 2px rgba(0,0,0,0.3);
+  --shadow-lg:     0 6.4px 14.4px rgba(0,0,0,0.4), 0 1.2px 3.6px rgba(0,0,0,0.32);
+  --overlay-bg:    rgba(0,0,0,0.6);
+  --mono:          ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, Menlo, monospace;
+  --ui:            'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, system-ui, sans-serif;
+  --r:             2px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,14 +102,15 @@ body.pre-auth #auth-screen { display: flex; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
   padding: 1.75rem;
   width: min(360px, 100%);
   display: flex; flex-direction: column; gap: 1.1rem;
 }
 .auth-logo {
-  font-family: var(--mono);
-  font-size: 0.9rem; font-weight: 700;
-  letter-spacing: 0.3em; color: var(--accent);
+  font-family: var(--ui);
+  font-size: 1.15rem; font-weight: 600;
+  letter-spacing: 0; color: var(--text);
   text-align: center; margin-bottom: 0.25rem;
 }
 .auth-tabs {
@@ -75,12 +126,12 @@ body.pre-auth #auth-screen { display: flex; }
 .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .auth-error {
   font-size: 0.75rem; color: var(--red);
-  background: rgba(217,80,80,0.1); border: 1px solid rgba(217,80,80,0.3);
+  background: rgba(var(--red-rgb),0.1); border: 1px solid rgba(var(--red-rgb),0.3);
   border-radius: var(--r); padding: 0.55rem 0.7rem;
 }
 .auth-status {
   font-size: 0.75rem; color: var(--green);
-  background: rgba(82,168,122,0.1); border: 1px solid rgba(82,168,122,0.3);
+  background: rgba(var(--green-rgb),0.1); border: 1px solid rgba(var(--green-rgb),0.3);
   border-radius: var(--r); padding: 0.55rem 0.7rem;
 }
 .auth-links {
@@ -101,7 +152,7 @@ body.pre-auth #auth-screen { display: flex; }
 /* ── Modal ── */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.72);
+  background: var(--overlay-bg);
   display: flex; align-items: center; justify-content: center;
   z-index: 100;
 }
@@ -109,12 +160,13 @@ body.pre-auth #auth-screen { display: flex; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
+  box-shadow: var(--shadow-lg);
   padding: 1.5rem;
   width: min(420px, 92vw);
   display: flex; flex-direction: column; gap: 1.1rem;
 }
 .modal-title {
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.18em;
@@ -152,11 +204,11 @@ header {
   z-index: 10;
 }
 .app-name {
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.3em;
-  color: var(--accent);
+  font-family: var(--ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text);
 }
 .header-right { display: flex; align-items: center; gap: 0.75rem; }
 .sync-label {
@@ -185,20 +237,20 @@ main {
 .active-card {
   background: var(--surface);
   border-radius: var(--r);
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--blue);
   padding: 1.25rem 1.4rem;
   display: flex; flex-direction: column; gap: 0.9rem;
   animation: pulse-border 2.4s ease-in-out infinite;
 }
 @keyframes pulse-border {
-  0%,100% { border-left-color: var(--accent); }
-  50%      { border-left-color: rgba(244,103,10,0.3); }
+  0%,100% { border-left-color: var(--blue); }
+  50%      { border-left-color: rgba(var(--blue-rgb),0.35); }
 }
 @media (prefers-reduced-motion: reduce) {
   .active-card { animation: none; }
 }
 .active-eyebrow {
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: 0.6rem; font-weight: 600;
   letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--accent);
@@ -244,7 +296,7 @@ main {
   display: flex; flex-direction: column; gap: 0.9rem;
 }
 .confirm-eyebrow {
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: 0.6rem; font-weight: 600;
   letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--blue);
@@ -273,7 +325,7 @@ main {
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   line-height: 1;
 }
-.stepper-btn:hover:not(:disabled) { background: var(--border); color: var(--text); border-color: #4a5060; }
+.stepper-btn:hover:not(:disabled) { background: var(--border); color: var(--text); border-color: var(--border-strong); }
 .stepper-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .stepper-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stepper-input {
@@ -308,7 +360,7 @@ main {
   display: flex; flex-direction: column; gap: 0.45rem;
 }
 .ado-preview-label {
-  font-family: var(--mono); font-size: 0.6rem; font-weight: 600;
+  font-family: var(--ui); font-size: 0.6rem; font-weight: 600;
   letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--text-muted); margin-bottom: 0.2rem;
 }
@@ -336,7 +388,7 @@ main {
   padding: 1.25rem 1.4rem;
 }
 .section-eyebrow {
-  font-family: var(--mono);
+  font-family: var(--ui);
   font-size: 0.6rem; font-weight: 600;
   letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--text-muted); margin-bottom: 0.9rem;
@@ -355,22 +407,22 @@ main {
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:disabled { opacity: 0.38; cursor: not-allowed; }
 
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: #df5e08; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--blue-hover); }
 
 .btn-danger {
-  background: rgba(217,80,80,0.13);
+  background: rgba(var(--red-rgb),0.13);
   color: var(--red);
-  border: 1px solid rgba(217,80,80,0.28);
+  border: 1px solid rgba(var(--red-rgb),0.28);
 }
-.btn-danger:hover:not(:disabled) { background: rgba(217,80,80,0.22); }
+.btn-danger:hover:not(:disabled) { background: rgba(var(--red-rgb),0.22); }
 
 .btn-ghost {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
-.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: #4a5060; }
+.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
 .btn-sm { font-size: 0.75rem; padding: 0.2rem 0.6rem; }
 
 /* ── Typeahead ── */
@@ -398,13 +450,13 @@ main {
   border: 1px solid var(--border);
   border-radius: var(--r);
   z-index: 50; max-height: 260px; overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-lg);
 }
 .dropdown-item {
   display: flex; align-items: baseline; gap: 0.65rem;
   padding: 0.58rem 0.85rem;
   cursor: pointer;
-  border-bottom: 1px solid rgba(44,51,64,0.7);
+  border-bottom: 1px solid rgba(var(--border-rgb),0.7);
   transition: background 0.1s;
 }
 .dropdown-item:last-child { border-bottom: none; }
@@ -444,7 +496,7 @@ main {
 .chip {
   display: flex; align-items: center; gap: 0.5rem;
   background: var(--accent-dim);
-  border: 1px solid rgba(244,103,10,0.28);
+  border: 1px solid rgba(var(--blue-rgb),0.3);
   border-radius: var(--r);
   padding: 0.48rem 0.85rem;
   margin-top: 0.6rem;
@@ -497,13 +549,13 @@ main {
 
 .log-table { width: 100%; border-collapse: collapse; }
 .log-table thead th {
-  font-family: var(--mono); font-size: 0.58rem; font-weight: 600;
+  font-family: var(--ui); font-size: 0.58rem; font-weight: 600;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
   text-align: left; padding: 0 0.5rem 0.5rem 0;
   border-bottom: 1px solid var(--border);
 }
 .log-table thead th:last-child { text-align: right; padding-right: 0; }
-.log-table tbody tr { border-bottom: 1px solid rgba(44,51,64,0.55); }
+.log-table tbody tr { border-bottom: 1px solid rgba(var(--border-rgb),0.6); }
 .log-table tbody tr:last-child { border-bottom: none; }
 .log-table tbody td { padding: 0.55rem 0.5rem 0.55rem 0; vertical-align: middle; }
 .td-id {
@@ -558,7 +610,7 @@ main {
 .day-header {
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.48rem 0; cursor: pointer;
-  border-top: 1px solid rgba(44,51,64,0.55);
+  border-top: 1px solid rgba(var(--border-rgb),0.6);
   user-select: none;
 }
 .day-header.no-entries { cursor: default; opacity: 0.5; }
@@ -578,7 +630,7 @@ main {
   font-family: var(--mono); font-size: 0.55rem; font-weight: 700;
   letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--accent); background: var(--accent-dim);
-  border: 1px solid rgba(244,103,10,0.22);
+  border: 1px solid rgba(var(--blue-rgb),0.25);
   border-radius: 2px; padding: 0.1rem 0.3rem;
 }
 .day-total {
@@ -613,7 +665,7 @@ select.input { cursor: pointer; }
 .delete-btn:hover { color: var(--red); }
 .edit-entry-btn:hover { color: var(--accent); }
 .continue-btn { color: var(--border); }
-.continue-btn:hover { color: #4caf87; }
+.continue-btn:hover { color: var(--green); }
 .entry-edit-row td {
   padding: 0.4rem 0.5rem 0.6rem;
   background: var(--surface-2);
@@ -633,14 +685,14 @@ select.input { cursor: pointer; }
 .entry-edit-actions { display: flex; gap: 0.4rem; margin-left: auto; }
 .entry-edit-actions button { font-size: 0.75rem; padding: 0.25rem 0.65rem; }
 .gap-row td { padding: 0.2rem 0; border-bottom: none !important; }
-.gap-row-inner { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.35rem 0.5rem; border-left: 2px solid #b8860b; margin-bottom: 0.15rem; }
+.gap-row-inner { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.35rem 0.5rem; border-left: 2px solid var(--amber); margin-bottom: 0.15rem; }
 .gap-row-controls { display: flex; align-items: center; gap: 0.55rem; }
 .gap-label { font-size: 0.68rem; font-family: var(--mono); color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
 .gap-form { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; }
 .gap-search-wrap { position: relative; flex: 1; min-width: 0; }
 .gap-input { width: 100%; font-size: 0.78rem; padding: 0.2rem 0.45rem; }
 .gap-chip { font-size: 0.72rem; background: var(--surface-2); border-radius: var(--r); padding: 0.15rem 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-.gap-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); z-index: 300; max-height: 180px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+.gap-dropdown { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); z-index: 300; max-height: 180px; overflow-y: auto; box-shadow: var(--shadow-lg); }
 .gap-dropdown.hidden { display: none; }
 .gap-note { width: 100%; resize: vertical; min-height: 2.5rem; font-size: 0.78rem; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: var(--r); padding: 0.3rem 0.5rem; box-sizing: border-box; font-family: var(--ui); }
 .gap-find-btn { margin-left: 0; font-size: 0.68rem; padding: 0.15rem 0.5rem; opacity: 0; transition: opacity 0.15s; }
@@ -651,7 +703,7 @@ select.input { cursor: pointer; }
 .day-header:hover .day-summary-btn { opacity: 1; }
 .day-header:hover .gap-find-btn { opacity: 1; }
 .day-summary-table th { font-size: 0.72rem; color: var(--text-muted); text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
-.day-summary-table td { font-size: 0.82rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(44,51,64,0.4); vertical-align: top; }
+.day-summary-table td { font-size: 0.82rem; padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(var(--border-rgb),0.45); vertical-align: top; }
 .day-summary-table .td-ado { font-family: var(--mono); font-weight: 700; text-align: right; white-space: nowrap; }
 .day-summary-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .day-summary-total-label { font-size: 0.82rem; color: var(--text-muted); }
@@ -700,12 +752,12 @@ select.input { cursor: pointer; }
 /* ── Publish modal ── */
 .publish-table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }
 .publish-table th {
-  font-family: var(--mono); font-size: 0.58rem; font-weight: 600;
+  font-family: var(--ui); font-size: 0.58rem; font-weight: 600;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
   text-align: left; padding: 0 0.5rem 0.5rem 0;
   border-bottom: 1px solid var(--border);
 }
-.publish-table td { padding: 0.5rem 0.5rem 0.5rem 0; vertical-align: middle; border-bottom: 1px solid rgba(44,51,64,0.55); }
+.publish-table td { padding: 0.5rem 0.5rem 0.5rem 0; vertical-align: middle; border-bottom: 1px solid rgba(var(--border-rgb),0.6); }
 .publish-table tr:last-child td { border-bottom: none; }
 .pub-stepper { display: flex; align-items: center; gap: 0.35rem; }
 .pub-stepper-val {
@@ -728,7 +780,7 @@ select.input { cursor: pointer; }
 }
 .publish-result-row {
   display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.4rem 0; border-bottom: 1px solid rgba(44,51,64,0.55);
+  padding: 0.4rem 0; border-bottom: 1px solid rgba(var(--border-rgb),0.6);
   font-size: 0.8rem;
 }
 .publish-result-row:last-child { border-bottom: none; }
@@ -910,6 +962,13 @@ select.input { cursor: pointer; }
 <div id="settings-modal" class="modal-overlay hidden">
   <div class="modal-panel">
     <div class="modal-title">Settings</div>
+    <div class="form-row">
+      <label class="form-label" for="theme-select">Theme</label>
+      <select id="theme-select" class="input">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
     <div class="form-row">
       <label class="form-label" for="pat-input">Azure DevOps Personal Access Token</label>
       <input type="password" id="pat-input" class="input"
@@ -1221,6 +1280,7 @@ select.input { cursor: pointer; }
     RETRO:           'punch_retro',
     TODO:            'punch_todo',
     GAP_THRESHOLD:   'punch_gap_threshold',
+    THEME:           'punch_theme',
   };
 
   const ORG     = 'storee';
@@ -1303,6 +1363,7 @@ select.input { cursor: pointer; }
   const weekPrev        = $('week-prev');
   const weekNext        = $('week-next');
   const weekStartSelect = $('week-start-select');
+  const themeSelect     = $('theme-select');
   const roundSelect          = $('round-select');
   const gapThresholdSelect   = $('gap-threshold-select');
   const workStartInput  = $('work-start-input');
@@ -1318,6 +1379,11 @@ select.input { cursor: pointer; }
   const logActions  = $('log-actions');
   const exportBtn   = $('export-btn');
   const toastWrap   = $('toasts');
+
+  // ── Theme ────────────────────────────────────────────────
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+  }
 
   // ── Storage helpers ──────────────────────────────────────
   function load(key, fallback) {
@@ -1338,7 +1404,7 @@ select.input { cursor: pointer; }
   // ── Cloud sync ───────────────────────────────────────────
   const SETTINGS_KEYS = new Set([
     K.WEEK_START, K.ROUND_INCREMENT, K.GAP_THRESHOLD,
-    K.WORK_START, K.WORK_END, K.NOTIFY_INTERVAL, K.PAT,
+    K.WORK_START, K.WORK_END, K.NOTIFY_INTERVAL, K.PAT, K.THEME,
   ]);
 
   function queueCloudSync(key, val) {
@@ -1421,6 +1487,7 @@ select.input { cursor: pointer; }
         work_start: load(K.WORK_START, ''),
         work_end: load(K.WORK_END, ''),
         notify_interval: load(K.NOTIFY_INTERVAL, 0),
+        theme: load(K.THEME, 'light'),
         updated_at: new Date().toISOString(),
       }));
       // PAT is stored as an encrypted Vault secret via RPC, never in this table directly
@@ -1449,6 +1516,8 @@ select.input { cursor: pointer; }
         localStorage.setItem(K.WORK_START, JSON.stringify(s.work_start ?? ''));
         localStorage.setItem(K.WORK_END, JSON.stringify(s.work_end ?? ''));
         localStorage.setItem(K.NOTIFY_INTERVAL, JSON.stringify(s.notify_interval ?? 0));
+        localStorage.setItem(K.THEME, JSON.stringify(s.theme || 'light'));
+        applyTheme(s.theme || 'light');
         const pat = patRes && !patRes.error ? patRes.data : null;
         if (s.remember_pat && pat) localStorage.setItem(K.PAT, JSON.stringify(pat));
         else localStorage.removeItem(K.PAT);
@@ -2641,7 +2710,7 @@ select.input { cursor: pointer; }
     const wrap = document.createElement('div');
     wrap.style.marginTop = '0.75rem';
     wrap.innerHTML = `
-      <div style="font-family:var(--mono);font-size:0.58rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Day Summary</div>
+      <div style="font-family:var(--ui);font-size:0.58rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Day Summary</div>
       <div class="publish-summary-box" id="day-summary-text">${esc(summary)}</div>
       <div style="text-align:right;margin-top:0.3rem">
         <button class="btn btn-ghost" id="copy-summary-btn" style="font-size:0.72rem;padding:0.35rem 0.85rem;">Copy</button>
@@ -2713,6 +2782,7 @@ select.input { cursor: pointer; }
   function openSettings() {
     patInput.value = getPat() || '';
     rememberPat.checked = !!getPat();
+    themeSelect.value = load(K.THEME, 'light');
     weekStartSelect.value = String(load(K.WEEK_START, 0));
     roundSelect.value         = String(load(K.ROUND_INCREMENT, 30));
     gapThresholdSelect.value  = String(load(K.GAP_THRESHOLD, 15));
@@ -2758,6 +2828,10 @@ select.input { cursor: pointer; }
   configureBtn.addEventListener('click', openSettings);
   settingsSave.addEventListener('click', saveSettings);
   settingsCancel.addEventListener('click', closeSettings);
+  themeSelect.addEventListener('change', () => {
+    applyTheme(themeSelect.value);
+    save(K.THEME, themeSelect.value);
+  });
   notifyTestBtn.addEventListener('click', async () => {
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission === 'granted') {
@@ -3289,6 +3363,7 @@ select.input { cursor: pointer; }
       suppressSync = true;
       clearLocalAppData();
       suppressSync = false;
+      applyTheme('light');
       document.body.classList.add('pre-auth');
       authEmail.value = '';
       authPassword.value = '';
