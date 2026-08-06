@@ -236,6 +236,10 @@ header {
 .icon-btn-sm:hover { color: var(--text); }
 .icon-btn-sm:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
 .org-name-display { display: inline-flex; align-items: center; gap: 0.35rem; }
+.org-pat-section {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 0.85rem 1rem;
+}
 
 /* ── Main ── */
 main {
@@ -1128,6 +1132,7 @@ body.settings-open #settings-page { display: flex; }
             <input type="password" id="pat-input" class="input"
               placeholder="Needs Work Items (Read &amp; Write) scope"
               autocomplete="off" spellcheck="false">
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.3rem;">Used when no organization is selected above the timer. Each organization has its own PAT, set in Settings → Organizations.</div>
           </div>
           <label class="checkbox-row">
             <input type="checkbox" id="remember-pat" checked>
@@ -1520,6 +1525,7 @@ body.settings-open #settings-page { display: flex; }
     THEME:           'punch_theme',
     IS_MANAGER:      'punch_is_manager',
     CURRENT_ORG:     'punch_current_org',
+    CURRENT_ORG_PAT: 'punch_current_org_pat',
   };
 
   const ORG     = 'storee';
@@ -1907,7 +1913,15 @@ body.settings-open #settings-page { display: flex; }
   }
 
   // ── ADO API ──────────────────────────────────────────────
-  function getPat() { return load(K.PAT, ''); }
+  // Personal PAT is used when no organization is selected. When an org is
+  // selected, that org's own PAT is used instead — deliberately no fallback
+  // to the personal PAT, so ADO calls never silently use the wrong identity.
+  function getPersonalPat() { return load(K.PAT, ''); }
+  function getPat() {
+    const orgId = load(K.CURRENT_ORG, null);
+    if (orgId) return load(K.CURRENT_ORG_PAT, '');
+    return getPersonalPat();
+  }
   function authHeader(pat) { return 'Basic ' + btoa(':' + pat); }
 
   async function fetchFromADO(pat) {
@@ -3042,8 +3056,8 @@ body.settings-open #settings-page { display: flex; }
 
   // ── Settings ─────────────────────────────────────────────
   function showSettingsPage(section) {
-    patInput.value = getPat() || '';
-    rememberPat.checked = !!getPat();
+    patInput.value = getPersonalPat() || '';
+    rememberPat.checked = !!getPersonalPat();
     themeSelect.value = load(K.THEME, 'light');
     weekStartSelect.value = String(load(K.WEEK_START, 0));
     roundSelect.value         = String(load(K.ROUND_INCREMENT, 30));
@@ -3111,7 +3125,7 @@ body.settings-open #settings-page { display: flex; }
 
   // ── Events ───────────────────────────────────────────────
   settingsBtn.addEventListener('click', () => showSettingsPage('general'));
-  configureBtn.addEventListener('click', () => showSettingsPage('general'));
+  configureBtn.addEventListener('click', () => showSettingsPage(load(K.CURRENT_ORG, null) ? 'organizations' : 'general'));
   settingsBackBtn.addEventListener('click', hideSettingsPage);
   generalSaveBtn.addEventListener('click', saveGeneralSettings);
   themeSelect.addEventListener('change', () => {
@@ -3370,10 +3384,12 @@ body.settings-open #settings-page { display: flex; }
       const { data, error } = await sb.rpc('redeem_org_invite', { p_code: code });
       if (error) throw error;
       const orgName = data && data[0] && data[0].org_name;
+      const orgId = data && data[0] && data[0].org_id;
       joinOrgStatus.style.color = 'var(--green)';
       joinOrgStatus.textContent = orgName ? `You've joined ${orgName}.` : `You've joined the organization.`;
       joinOrgCodeInput.value = '';
       toast('Joined organization.', 'success');
+      if (orgId) save(K.CURRENT_ORG, orgId);
       renderOrgList();
       renderOrgSwitcher();
     } catch (err) {
@@ -3389,10 +3405,11 @@ body.settings-open #settings-page { display: flex; }
     if (!name || !currentUser) return;
     createOrgBtn.disabled = true;
     try {
-      const { error } = await sb.from('organizations').insert({ name, owner_id: currentUser.id });
+      const { data, error } = await sb.from('organizations').insert({ name, owner_id: currentUser.id }).select().single();
       if (error) throw error;
       newOrgNameInput.value = '';
       toast('Organization created.', 'success');
+      if (data && data.id) save(K.CURRENT_ORG, data.id);
       renderOrgList();
       renderOrgSwitcher();
     } catch (err) {
@@ -3510,6 +3527,58 @@ body.settings-open #settings-page { display: flex; }
     }).join('')}</ul>`;
   }
 
+  function renderOrgPatSectionHtml(org) {
+    return `
+      <div class="org-pat-section">
+        <div class="section-eyebrow" style="margin-bottom:0.4rem;">Your Azure DevOps PAT for ${esc(org.name)}</div>
+        <input type="password" class="input org-pat-input" placeholder="Needs Work Items (Read &amp; Write) scope" autocomplete="off" spellcheck="false">
+        <label class="checkbox-row" style="margin-top:0.5rem;">
+          <input type="checkbox" class="org-pat-remember" checked>
+          Remember this PAT (synced to your account)
+        </label>
+        <div style="display:flex; align-items:center; gap:0.6rem; margin-top:0.5rem;">
+          <button class="btn btn-ghost btn-sm org-pat-save">Save PAT</button>
+          <span class="org-pat-status" style="font-size:0.8rem;color:var(--text-muted);"></span>
+        </div>
+      </div>
+    `;
+  }
+
+  async function wireOrgPatSection(container, org) {
+    const input = container.querySelector('.org-pat-input');
+    const remember = container.querySelector('.org-pat-remember');
+    const saveBtn = container.querySelector('.org-pat-save');
+    const status = container.querySelector('.org-pat-status');
+    if (!input) return;
+    try {
+      const { data, error } = await sb.rpc('get_org_pat', { p_org_id: org.id });
+      if (error) throw error;
+      if (data) input.value = data;
+      remember.checked = !!data;
+    } catch (err) { console.warn('load org pat failed', err); }
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      status.textContent = 'Saving…';
+      try {
+        const pat = remember.checked ? input.value.trim() : '';
+        const { error } = await sb.rpc('set_org_pat', { p_org_id: org.id, p_pat: pat });
+        if (error) throw error;
+        status.textContent = 'Saved.';
+        toast('PAT saved for this organization.', 'success');
+        if (load(K.CURRENT_ORG, null) === org.id) {
+          await resolveActivePat();
+          await loadTasks(true);
+        }
+      } catch (err) {
+        status.textContent = '';
+        toast(err.message || 'Could not save PAT.', 'error');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
   async function renderOrgManagePanel(org, container) {
     const [{ data: invites }, { data: teams }, { data: members }] = await Promise.all([
       sb.from('org_invites').select('*').eq('org_id', org.id).is('used_at', null).gte('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
@@ -3533,6 +3602,7 @@ body.settings-open #settings-page { display: flex; }
     });
 
     container.innerHTML = `
+      ${renderOrgPatSectionHtml(org)}
       <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Invite</div>
         <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
@@ -3564,6 +3634,8 @@ body.settings-open #settings-page { display: flex; }
         <ul class="roster-list org-roster-list" style="margin-top:0.5rem;"></ul>
       </div>
     `;
+
+    wireOrgPatSection(container, org);
 
     const invitesListEl = container.querySelector('.org-invites-list');
     function renderInvitesInto(list) {
@@ -3733,34 +3805,66 @@ body.settings-open #settings-page { display: flex; }
       .filter(a => a.user_id === currentUser.id)
       .map(a => teamNameById[a.team_id] || 'Unknown')
       .sort();
-    statusEl.textContent = `Your team${myTeamNames.length === 1 ? '' : 's'}: ${myTeamNames.length ? myTeamNames.join(', ') : 'Unassigned'}`;
+    statusEl.textContent = `Your team${myTeamNames.length > 1 ? 's' : ''}: ${myTeamNames.length ? myTeamNames.join(', ') : 'Unassigned'}`;
 
     container.innerHTML = `
+      ${renderOrgPatSectionHtml(org)}
       <div>
         <div class="section-eyebrow" style="margin-bottom:0.4rem;">Members</div>
         ${renderSimpleMemberList(memberIds, profileById)}
       </div>
     `;
+    wireOrgPatSection(container, org);
   }
 
   // ── Teams tab (managers only; scoped to the org picked in the switcher) ──
+  async function resolveActivePat() {
+    const orgId = load(K.CURRENT_ORG, null);
+    if (!orgId || !currentUser) {
+      localStorage.removeItem(K.CURRENT_ORG_PAT);
+      return;
+    }
+    try {
+      const { data, error } = await sb.rpc('get_org_pat', { p_org_id: orgId });
+      if (error) throw error;
+      if (data) localStorage.setItem(K.CURRENT_ORG_PAT, JSON.stringify(data));
+      else localStorage.removeItem(K.CURRENT_ORG_PAT);
+    } catch (err) {
+      console.warn('resolve org pat failed', err);
+      localStorage.removeItem(K.CURRENT_ORG_PAT);
+    }
+  }
+
   async function renderOrgSwitcher() {
     if (!currentUser) return;
     const { data: orgs, error } = await sb.from('organizations').select('*').order('created_at', { ascending: true });
     if (error) { console.warn('load orgs for switcher failed', error); return; }
     orgSwitcherRow.classList.toggle('hidden', !orgs || !orgs.length);
-    if (!orgs || !orgs.length) return;
+    if (!orgs || !orgs.length) {
+      const hadOrg = !!load(K.CURRENT_ORG, null);
+      drop(K.CURRENT_ORG);
+      localStorage.removeItem(K.CURRENT_ORG_PAT);
+      if (hadOrg) await loadTasks(true);
+      return;
+    }
 
-    const saved = load(K.CURRENT_ORG, null);
+    const saved = load(K.CURRENT_ORG, '');
     const validIds = orgs.map(o => o.id);
-    const current = validIds.includes(saved) ? saved : orgs[0].id;
+    const current = (saved && validIds.includes(saved)) ? saved : '';
+    const changed = current !== saved;
     save(K.CURRENT_ORG, current);
 
-    orgSwitcher.innerHTML = orgs.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
+    orgSwitcher.innerHTML = '<option value="">Personal (no organization)</option>'
+      + orgs.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
     orgSwitcher.value = current;
+
+    await resolveActivePat();
+    if (changed) await loadTasks(true);
   }
-  orgSwitcher.addEventListener('change', () => {
+  orgSwitcher.addEventListener('change', async () => {
     save(K.CURRENT_ORG, orgSwitcher.value);
+    await resolveActivePat();
+    await loadTasks(true);
     if (document.getElementById('tab-teams').classList.contains('active')) renderTeamsTab();
   });
 
